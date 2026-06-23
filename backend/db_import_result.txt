@@ -1,0 +1,4 @@
+Executed: 10 statements
+Errors: 0
+
+Tables: ca_agent_quota_logs, ca_agents, ca_card_types, ca_cards, ca_configs, ca_logs, ca_orders, ca_projects, ca_users

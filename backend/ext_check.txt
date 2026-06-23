@@ -1,0 +1,6 @@
+pdo_mysql: YES
+openssl: YES
+mbstring: YES
+json: YES
+curl: YES
+fileinfo: YES

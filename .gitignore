@@ -15,6 +15,12 @@
 *.swp
 *.swo
 
+# 临时文件
+/backend/tmp_*.php
+/backend/test_admin.txt
+/backend/public/uploads/avatars/*
+/frontend/vite.config.js.timestamp-*
+
 # 系统文件
 .DS_Store
 Thumbs.db

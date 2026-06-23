@@ -40,6 +40,13 @@ const authorizationApi = {
   },
 
   /**
+   * 更新授权
+   */
+  update(id, data) {
+    return request.put(`/authorizations/${id}`, data)
+  },
+
+  /**
    * 删除授权
    */
   delete(id) {

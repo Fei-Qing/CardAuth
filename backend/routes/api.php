@@ -15,6 +15,7 @@ use App\Controllers\SystemController;
 use App\Controllers\AuthorizationController;
 use App\Controllers\CouponController;
 use App\Controllers\BlacklistController;
+use App\Controllers\NotificationController;
 use App\Middleware\AuthMiddleware;
 use App\Middleware\RateLimitMiddleware;
 use App\Middleware\ApiKeyMiddleware;
@@ -54,6 +55,10 @@ $router->group('api/public', function ($router) {
     // 优惠码验证
     $router->post('coupons/validate', [CouponController::class, 'validate']);
 }, [new RateLimitMiddleware(30, 60, 'public')]);
+
+// SMTP 定时通知 (cron 调用，无需认证)
+$router->get('api/cron/notify-expiring', [NotificationController::class, 'notifyExpiring']);
+$router->post('api/cron/notify-expiring', [NotificationController::class, 'notifyExpiring']);
 
 // 授权验证 (API Key认证)
 $router->group('api/public/verify', function ($router) {
@@ -146,6 +151,11 @@ $router->group('api', function ($router) {
     $router->get('system/configs', [SystemController::class, 'getConfigs']);
     $router->post('system/configs', [SystemController::class, 'saveConfigs']);
     $router->post('system/test-payment', [SystemController::class, 'testPayment']);
+    // SMTP 邮件
+    $router->get('system/smtp-config', [NotificationController::class, 'getSmtpConfig']);
+    $router->post('system/smtp-config', [NotificationController::class, 'saveSmtpConfig']);
+    $router->post('system/test-smtp', [NotificationController::class, 'testSmtp']);
+    $router->post('system/notify-expiring', [NotificationController::class, 'notifyExpiring']);
 
     // 授权管理
     $router->get('authorizations', [AuthorizationController::class, 'list']);
@@ -153,6 +163,7 @@ $router->group('api', function ($router) {
     $router->get('authorizations/export', [AuthorizationController::class, 'export']);
     $router->get('authorizations/{id}', [AuthorizationController::class, 'detail']);
     $router->post('authorizations', [AuthorizationController::class, 'create']);
+    $router->put('authorizations/{id}', [AuthorizationController::class, 'update']);
     $router->put('authorizations/{id}/revoke', [AuthorizationController::class, 'revoke']);
     $router->delete('authorizations/{id}', [AuthorizationController::class, 'delete']);
     $router->post('authorizations/batch-delete', [AuthorizationController::class, 'batchDelete']);

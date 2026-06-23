@@ -527,6 +527,87 @@ class AuthorizationController extends Controller
     }
 
     /**
+     * 更新授权信息
+     * PUT /api/authorizations/{id}
+     * Body: { bot_qq?, contact_qq?, contact_name?, duration_days?, expire_time?, remark? }
+     */
+    public function update(int $id): void
+    {
+        $db = Database::getInstance();
+        $auth = $db->fetch("SELECT * FROM {$db->table('authorizations')} WHERE id = ?", [$id]);
+
+        if (!$auth) {
+            $this->error('授权记录不存在', 404);
+        }
+
+        $input = $this->getJsonInput();
+        $updates = [];
+        $params = [];
+
+        // 可编辑字段
+        if (isset($input['bot_qq']) && $input['bot_qq'] !== '') {
+            $botQq = trim($input['bot_qq']);
+            if (!preg_match('/^\d{5,15}$/', $botQq)) {
+                $this->error('机器人QQ格式不正确');
+            }
+            $updates[] = 'bot_qq = ?';
+            $params[] = $botQq;
+        }
+        if (isset($input['contact_qq']) && $input['contact_qq'] !== '') {
+            $contactQq = trim($input['contact_qq']);
+            if (!preg_match('/^\d{5,15}$/', $contactQq)) {
+                $this->error('联系人QQ格式不正确');
+            }
+            $updates[] = 'contact_qq = ?';
+            $params[] = $contactQq;
+        }
+        if (isset($input['contact_name'])) {
+            $updates[] = 'contact_name = ?';
+            $params[] = trim($input['contact_name']);
+        }
+        if (isset($input['remark'])) {
+            $updates[] = 'remark = ?';
+            $params[] = trim($input['remark']);
+        }
+        if (isset($input['duration_days'])) {
+            $durationDays = (int) $input['duration_days'];
+            $updates[] = 'duration_days = ?';
+            $params[] = $durationDays;
+            // 更新过期时间
+            if ($durationDays === 0) {
+                $updates[] = 'expire_time = NULL';
+            } else {
+                // 从 authorized_at 重新计算过期时间
+                $baseTime = $auth['authorized_at'] ?? date('Y-m-d H:i:s');
+                $updates[] = 'expire_time = ?';
+                $params[] = date('Y-m-d H:i:s', strtotime("+{$durationDays} days", strtotime($auth['expire_time'] ?? $baseTime)));
+            }
+        }
+        if (isset($input['expire_time']) && $input['expire_time'] !== '') {
+            $updates[] = 'expire_time = ?';
+            $params[] = $input['expire_time'];
+        }
+
+        if (empty($updates)) {
+            $this->error('没有需要更新的字段');
+        }
+
+        $updates[] = 'updated_at = NOW()';
+        $params[] = $id;
+
+        $db->execute(
+            "UPDATE {$db->table('authorizations')} SET " . implode(', ', $updates) . " WHERE id = ?",
+            $params
+        );
+
+        $this->logAction('authorization_update', 'authorization', $id, [
+            'fields' => array_keys($input),
+        ]);
+
+        $this->success(null, '授权更新成功');
+    }
+
+    /**
      * 撤销授权
      * PUT /api/authorizations/{id}/revoke
      * Body: { reason? }

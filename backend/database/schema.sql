@@ -319,4 +319,13 @@ INSERT INTO `ca_configs` (`key`, `value`, `description`) VALUES
 ('site_name', 'CardAuth授权管理系统', '站点名称'),
 ('site_logo', '', '站点Logo'),
 ('card_key_prefix', 'CA', '卡密前缀'),
-('order_expire_minutes', '15', '订单过期时间(分钟)');
+('order_expire_minutes', '15', '订单过期时间(分钟)'),
+('smtp_host', '', 'SMTP服务器地址'),
+('smtp_port', '465', 'SMTP端口'),
+('smtp_user', '', 'SMTP用户名'),
+('smtp_pass', '', 'SMTP密码'),
+('smtp_encryption', 'ssl', 'SMTP加密方式(ssl/tls)'),
+('smtp_from_email', '', '发件人邮箱'),
+('smtp_from_name', 'CardAuth', '发件人名称'),
+('smtp_enabled', '0', '是否启用邮件通知(1=启用,0=禁用)'),
+('smtp_expire_days', '7', '到期前N天发送提醒邮件');

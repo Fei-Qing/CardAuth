@@ -1,7 +1,5 @@
 # CardAuth - 卡密授权管理系统
 
-> 半成品，持续开发中。
-
 一个轻量级的卡密（激活码）+ 机器授权管理系统，支持多项目管理、代理分销、在线支付购买，适用于软件授权、会员激活等场景。
 
 ## 技术栈
@@ -10,7 +8,7 @@
 |---|---|
 | 后端 | PHP 7.4+ 自研框架（Router + Middleware + Controller） |
 | 数据库 | MySQL 8.0+ |
-| 前端 | Vue 3 + Element Plus + Pinia |
+| 前端 | Vue 3 + Element Plus + Pinia + ECharts |
 | 构建 | Vite |
 
 ## 功能概览
@@ -29,6 +27,8 @@
 - 订单管理（代客手动完成 / 手动确认）
 - 在线购买商城（公开页面，支持 epay/codepay 支付回调）
 - 黑名单系统（机器码/IP 封禁，可配置封禁策略）
+- SMTP 邮件通知（授权快到期自动发送提醒到联系人 QQ 邮箱）
+- 仪表盘统计图表（收入趋势、授权趋势、套餐销售占比）
 - 操作日志
 
 ### 内置页面
@@ -57,13 +57,7 @@ cp .env.example .env
 # 编辑 .env 填入数据库信息
 ```
 
-### 3. 安装 PHP 依赖
-```bash
-cd backend
-php composer.phar install
-```
-
-### 4. 启动
+### 3. 启动
 ```bash
 # 一键启动（前端 + 后端）
 .\start.ps1
@@ -73,13 +67,509 @@ cd backend && php -S 0.0.0.0:8080 -t backend
 cd frontend && npm install && npm run dev
 ```
 
-### 5. 访问
+### 4. 访问
 - 管理后台：`http://localhost:3000`
 - 代理登录：`http://localhost:3000/#/agent/login`
 - 购买商城：`http://localhost:3000/#/shop`
 
-### 6. 默认管理员
-数据库默认会插入 `admin / admin123` 的超级管理员账号（需在 `schema.sql` 末尾自行添加 INSERT 语句，或在用户管理页面注册后手动修改角色）。
+### 5. 默认管理员
+| 用户名 | 密码 |
+|--------|------|
+| admin | admin123456 |
+
+## SMTP 邮件通知配置
+
+在系统配置 -> SMTP邮件配置中填写 SMTP 信息，系统将自动在授权到期前 N 天发送提醒邮件到联系人的 QQ 邮箱（`contact_qq@qq.com`）。
+
+### 定时任务 (Cron)
+建议设置每 6 小时执行一次过期检查：
+```bash
+# Linux crontab
+0 */6 * * * curl -s http://your-domain/api/cron/notify-expiring > /dev/null
+
+# Windows 任务计划程序
+curl -s http://your-domain/api/cron/notify-expiring
+```
+
+---
+
+# API 文档
+
+## 鉴权说明
+
+| 类型 | 说明 |
+|------|------|
+| **JWT Token** | 登录后获取，请求头 `Authorization: Bearer <token>`，有效期 24 小时 |
+| **API Key** | 项目密钥，仅用于授权验证接口，请求头 `X-Api-Key: <key>` |
+| **公开接口** | 无需认证，有频率限制（60秒内 30 次） |
+
+---
+
+## 一、公开接口（无需认证）
+
+### 1.1 查询授权状态（按机器人QQ）
+
+```
+GET /api/public/authorizations/query?bot_qq=123456789
+```
+
+**响应示例：**
+```json
+{
+  "code": 200,
+  "data": {
+    "bot_qq": "123456789",
+    "total": 2,
+    "active_count": 1,
+    "expired_count": 1,
+    "revoked_count": 0,
+    "has_valid_auth": true,
+    "list": [
+      {
+        "id": 1,
+        "card_key": "CA-XXXX-XXXX",
+        "project_name": "演示项目",
+        "bot_qq": "123456789",
+        "contact_qq": "987654321",
+        "contact_name": "张三",
+        "duration_days": 30,
+        "status": "active",
+        "authorized_at": "2026-01-01 12:00:00",
+        "expire_time": "2026-01-31 12:00:00",
+        "is_expired": false
+      }
+    ]
+  }
+}
+```
+
+### 1.2 验证授权有效性（客户端调用）
+
+```
+POST /api/public/authorizations/verify
+Content-Type: application/json
+
+{
+  "bot_qq": "123456789",
+  "card_key": "CA-XXXX-XXXX",   // 可选
+  "contact_qq": "987654321"      // 可选
+}
+```
+
+**响应示例（有效）：**
+```json
+{
+  "code": 200,
+  "data": {
+    "valid": true,
+    "bot_qq": "123456789",
+    "contact_qq": "987654321",
+    "card_key": "CA-XXXX-XXXX",
+    "project_name": "演示项目",
+    "expire_time": "2026-01-31 12:00:00",
+    "days_left": 20,
+    "has_valid_auth": true,
+    "message": "授权有效"
+  }
+}
+```
+
+**响应示例（无效）：**
+```json
+{
+  "code": 200,
+  "data": {
+    "valid": false,
+    "bot_qq": "123456789",
+    "has_valid_auth": false,
+    "message": "未找到有效授权"
+  }
+}
+```
+
+### 1.3 API Key 授权验证
+
+```
+POST /api/public/verify
+X-Api-Key: <项目的 API Key>
+Content-Type: application/json
+
+{
+  "bot_qq": "123456789",
+  "contact_qq": "987654321"     // 可选
+}
+```
+
+**响应格式同 1.2。**
+
+### 1.4 获取项目列表（商城用）
+
+```
+GET /api/public/projects
+```
+
+### 1.5 获取项目套餐列表
+
+```
+GET /api/public/projects/{project_id}/card-types
+```
+
+### 1.6 创建订单
+
+```
+POST /api/public/orders
+Content-Type: application/json
+
+{
+  "project_id": 1,
+  "card_type_id": 1,
+  "amount": 29.90,
+  "pay_type": "wxpay",
+  "contact_qq": "987654321",
+  "bot_qq": "123456789",
+  "coupon_code": ""             // 可选，优惠码
+}
+```
+
+**响应示例：**
+```json
+{
+  "code": 200,
+  "data": {
+    "order_no": "2026062317530410859",
+    "pay_url": "https://pay.example.com/xxx",
+    "is_renew": false,
+    "contact_qq_warn": null,
+    "contact_qq": "987654321"
+  }
+}
+```
+
+### 1.7 查询订单
+
+```
+GET /api/public/orders/query?order_no=2026062317530410859
+```
+
+---
+
+## 二、认证接口
+
+### 2.1 管理员登录
+
+```
+POST /api/auth/admin-login
+Content-Type: application/json
+
+{
+  "username": "admin",
+  "password": "admin123456"
+}
+```
+
+**响应示例：**
+```json
+{
+  "code": 200,
+  "data": {
+    "token": "eyJ...",
+    "user": { "id": 1, "username": "admin", "role": "admin" }
+  }
+}
+```
+
+### 2.2 代理登录
+
+```
+POST /api/auth/agent-login
+Content-Type: application/json
+
+{
+  "username": "agent001",
+  "password": "123456"
+}
+```
+
+### 2.3 代理注册
+
+```
+POST /api/auth/agent-register
+Content-Type: application/json
+
+{
+  "username": "new_agent",
+  "password": "123456",
+  "nickname": "新代理"
+}
+```
+
+### 2.4 刷新 Token
+
+```
+POST /api/auth/refresh
+Authorization: Bearer <token>
+```
+
+### 2.5 获取当前用户信息
+
+```
+GET /api/auth/me
+Authorization: Bearer <token>
+```
+
+---
+
+## 三、仪表盘
+
+### 3.1 仪表盘数据
+
+```
+GET /api/dashboard
+Authorization: Bearer <token>
+```
+
+**响应包含：**
+- 统计数字（项目数、卡密数、订单数、收入等）
+- `order_trend`: 近 7 天订单趋势
+- `revenue_trend_30`: 近 30 天收入趋势
+- `auth_trend_30`: 近 30 天新增授权趋势
+- `package_distribution`: 套餐销售占比
+- `expiring_soon`: 即将过期授权数
+
+---
+
+## 四、项目与套餐管理
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/projects` | 项目列表 |
+| GET | `/api/projects/all` | 全部项目（下拉用） |
+| GET | `/api/projects/{id}` | 项目详情 |
+| POST | `/api/projects` | 创建项目 |
+| PUT | `/api/projects/{id}` | 更新项目 |
+| DELETE | `/api/projects/{id}` | 删除项目 |
+| POST | `/api/projects/{id}/regenerate-key` | 重新生成 API Key |
+| GET | `/api/projects/{id}/card-types` | 某项目的套餐列表 |
+| POST | `/api/projects/{id}/card-types` | 创建套餐 |
+| PUT | `/api/projects/{id}/card-types/{typeId}` | 更新套餐 |
+| DELETE | `/api/projects/{id}/card-types/{typeId}` | 删除套餐 |
+| GET | `/api/products` | 全量商品列表 |
+| GET | `/api/products/export` | 导出商品 |
+
+### 创建项目
+
+```
+POST /api/projects
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "name": "我的项目",
+  "description": "项目描述"
+}
+```
+
+### 创建套餐
+
+```
+POST /api/projects/1/card-types
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "name": "月卡",
+  "duration_days": 30,
+  "price": 29.90,
+  "agent_cost": 20.00,
+  "sort": 1,
+  "status": 1
+}
+```
+
+---
+
+## 五、卡密管理
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/cards` | 卡密列表（支持分页、筛选、排序） |
+| GET | `/api/cards/stats` | 卡密统计 |
+| GET | `/api/cards/{id}` | 卡密详情 |
+| POST | `/api/cards/generate` | 批量生成卡密 |
+| POST | `/api/cards/import` | 导入卡密 |
+| POST | `/api/cards/batch-status` | 批量修改状态 |
+| POST | `/api/cards/batch-delete` | 批量删除 |
+| PATCH | `/api/cards/{id}/status` | 单个卡密启用/禁用 |
+| GET | `/api/cards/export` | 导出卡密（CSV/Excel） |
+
+### 生成卡密
+
+```
+POST /api/cards/generate
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "project_id": 1,
+  "card_type_id": 1,
+  "count": 100,
+  "prefix": "CA"
+}
+```
+
+---
+
+## 六、授权管理
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/authorizations` | 授权列表 |
+| GET | `/api/authorizations/stats` | 授权统计 |
+| GET | `/api/authorizations/{id}` | 授权详情 |
+| POST | `/api/authorizations` | 新增授权 |
+| PUT | `/api/authorizations/{id}/revoke` | 撤销授权 |
+| DELETE | `/api/authorizations/{id}` | 删除授权 |
+| POST | `/api/authorizations/batch-delete` | 批量删除 |
+| GET | `/api/authorizations/export` | 导出授权 |
+
+### 新增授权
+
+```
+POST /api/authorizations
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "project_id": 1,
+  "card_type_id": 1,
+  "bot_qq": "123456789",
+  "contact_qq": "987654321",
+  "contact_name": "张三"
+}
+```
+
+**续费逻辑**：若 `bot_qq + contact_qq` 已存在活跃授权，自动续费延长过期时间。
+
+### 撤销授权
+
+```
+PUT /api/authorizations/{id}/revoke
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "reason": "用户违规"
+}
+```
+
+---
+
+## 七、订单管理
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/orders` | 订单列表 |
+| GET | `/api/orders/{id}` | 订单详情 |
+| POST | `/api/orders/{id}/complete` | 手动完成订单 |
+| GET | `/api/orders/export` | 导出订单 |
+
+---
+
+## 八、用户管理
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/users` | 用户列表 |
+| GET | `/api/users/stats` | 用户统计 |
+| POST | `/api/users` | 创建用户 |
+| PUT | `/api/users/{id}` | 更新用户 |
+| DELETE | `/api/users/{id}` | 删除用户 |
+| POST | `/api/users/batch-delete` | 批量删除 |
+| GET | `/api/users/export` | 导出用户 |
+
+---
+
+## 九、代理管理
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/agents` | 代理列表 |
+| GET | `/api/agents/my-quota` | 当前代理额度 |
+| POST | `/api/agents/recharge` | 充值额度 |
+| POST | `/api/agents/adjust-quota` | 调整额度 |
+| GET | `/api/agents/quota-logs` | 额度变动日志 |
+| POST | `/api/agents/{id}/reset-password` | 重置代理密码 |
+
+---
+
+## 十、优惠券
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/coupons` | 优惠券列表 |
+| POST | `/api/coupons` | 创建优惠券 |
+| PUT | `/api/coupons/{id}` | 更新优惠券 |
+| DELETE | `/api/coupons/{id}` | 删除优惠券 |
+
+---
+
+## 十一、黑名单
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/blacklists` | 黑名单列表 |
+| POST | `/api/blacklists` | 添加黑名单 |
+| POST | `/api/blacklists/batch` | 批量添加 |
+| POST | `/api/blacklists/import` | 导入黑名单 |
+| PUT | `/api/blacklists/{id}` | 更新黑名单 |
+| DELETE | `/api/blacklists/{id}` | 删除黑名单 |
+| POST | `/api/blacklists/batch-delete` | 批量删除 |
+
+---
+
+## 十二、系统配置
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/system/configs?keys=key1,key2` | 获取配置 |
+| POST | `/api/system/configs` | 保存配置 |
+| GET | `/api/system/smtp-config` | 获取 SMTP 配置 |
+| POST | `/api/system/smtp-config` | 保存 SMTP 配置 |
+| POST | `/api/system/test-smtp` | 发送测试邮件 |
+| POST | `/api/system/notify-expiring` | 手动触发过期提醒 |
+
+---
+
+## 十三、定时任务
+
+```
+POST /api/cron/notify-expiring
+GET  /api/cron/notify-expiring
+```
+
+无需认证，检查即将过期的授权并向联系人 QQ 邮箱发送提醒。
+
+---
+
+## 错误码说明
+
+| code | 说明 |
+|------|------|
+| 200 | 成功 |
+| 400 | 参数错误 |
+| 401 | 未登录 / Token 无效 |
+| 403 | 无权限 |
+| 404 | 资源不存在 |
+| 429 | 请求过于频繁 |
+| 500 | 服务器错误 |
+
+通用错误响应：
+```json
+{
+  "code": 400,
+  "message": "参数错误描述"
+}
+```
 
 ## 项目结构
 
@@ -87,7 +577,7 @@ cd frontend && npm install && npm run dev
 card/
 ├── backend/                  # PHP 后端
 │   ├── app/
-│   │   ├── Controllers/      # 控制器 (11 个模块)
+│   │   ├── Controllers/      # 控制器 (12 个模块)
 │   │   ├── Core/             # 框架核心 (Router/Controller/Database/Middleware/Validator)
 │   │   ├── Middleware/       # 中间件 (Auth/JWT/RateLimit/ApiKey/Blacklist/Role)
 │   │   └── Services/         # 服务层 (Jwt/Blacklist/Permission/Snowflake)
@@ -103,13 +593,6 @@ card/
 │       └── views/            # 页面组件 (管理后台 + 代理 + 公开)
 └── deploy/                   # 部署配置 (Nginx + 宝塔)
 ```
-
-## 待完善
-- [ ] 支付回调验签完善
-- [ ] 代理层级佣金结算
-- [ ] 数据统计与报表导出
-- [ ] 单元测试与 E2E 测试覆盖
-- [ ] Docker 化部署
 
 ## License
 

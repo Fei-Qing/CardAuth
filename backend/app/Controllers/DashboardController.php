@@ -65,6 +65,37 @@ class DashboardController extends Controller
                  GROUP BY DATE(created_at)
                  ORDER BY date ASC"
             );
+            // 近30天收入趋势
+            $data['revenue_trend_30'] = $db->fetchAll(
+                "SELECT DATE(paid_at) AS date, COALESCE(SUM(amount), 0) AS amount
+                 FROM {$db->table('orders')}
+                 WHERE status = 'paid' AND paid_at >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+                 GROUP BY DATE(paid_at)
+                 ORDER BY date ASC"
+            );
+            // 近30天新增授权趋势
+            $data['auth_trend_30'] = $db->fetchAll(
+                "SELECT DATE(authorized_at) AS date, COUNT(*) AS count
+                 FROM {$db->table('authorizations')}
+                 WHERE authorized_at >= DATE_SUB(CURDATE(), INTERVAL 30 DAY) AND status = 'active'
+                 GROUP BY DATE(authorized_at)
+                 ORDER BY date ASC"
+            );
+            // 套餐销售占比（按已支付订单金额）
+            $data['package_distribution'] = $db->fetchAll(
+                "SELECT ct.name, COALESCE(SUM(o.amount), 0) AS amount, COUNT(*) AS count
+                 FROM {$db->table('orders')} o
+                 LEFT JOIN {$db->table('card_types')} ct ON o.card_type_id = ct.id
+                 WHERE o.status = 'paid'
+                 GROUP BY o.card_type_id, ct.name
+                 ORDER BY amount DESC"
+            );
+            // 即将过期授权数（7天内）
+            $data['expiring_soon'] = (int) $db->fetchColumn(
+                "SELECT COUNT(*) FROM {$db->table('authorizations')}
+                 WHERE status = 'active' AND expire_time IS NOT NULL
+                 AND expire_time BETWEEN NOW() AND DATE_ADD(NOW(), INTERVAL 7 DAY)"
+            );
         } elseif ($userRole === 'agent') {
             // 代理数据
             $agent = $db->fetch(

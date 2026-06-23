@@ -79,6 +79,61 @@
           </el-form>
         </el-card>
       </el-tab-pane>
+
+      <!-- SMTP 邮件配置 -->
+      <el-tab-pane name="smtp" label="SMTP邮件配置">
+        <template #label>
+          <span><el-icon><Message /></el-icon> SMTP邮件配置</span>
+        </template>
+        <el-card shadow="never" class="config-card" v-loading="smtpLoading">
+          <template #header>
+            <div class="card-header">
+              <span>SMTP 邮件服务器</span>
+              <el-switch v-model="smtpForm.smtp_enabled" active-text="启用" inactive-text="禁用" :active-value="'1'" :inactive-value="'0'" inline-prompt style="--el-switch-on-color:#22c55e" />
+            </div>
+          </template>
+          <el-form ref="smtpFormRef" :model="smtpForm" label-width="140px" label-position="right">
+            <el-form-item label="SMTP 服务器" prop="smtp_host">
+              <el-input v-model="smtpForm.smtp_host" placeholder="如 smtp.qq.com" />
+            </el-form-item>
+            <el-form-item label="端口" prop="smtp_port">
+              <el-input-number v-model="smtpForm.smtp_port" :min="1" :max="65535" />
+              <span class="form-tip">SSL 通常 465，TLS 通常 587</span>
+            </el-form-item>
+            <el-form-item label="加密方式" prop="smtp_encryption">
+              <el-radio-group v-model="smtpForm.smtp_encryption">
+                <el-radio value="ssl">SSL</el-radio>
+                <el-radio value="tls">TLS</el-radio>
+              </el-radio-group>
+            </el-form-item>
+            <el-form-item label="用户名" prop="smtp_user">
+              <el-input v-model="smtpForm.smtp_user" placeholder="如 123456@qq.com" />
+            </el-form-item>
+            <el-form-item label="密码" prop="smtp_pass">
+              <el-input v-model="smtpForm.smtp_pass" type="password" show-password placeholder="QQ邮箱需使用授权码" />
+            </el-form-item>
+            <el-form-item label="发件人邮箱" prop="smtp_from_email">
+              <el-input v-model="smtpForm.smtp_from_email" placeholder="留空则使用用户名" />
+            </el-form-item>
+            <el-form-item label="发件人名称" prop="smtp_from_name">
+              <el-input v-model="smtpForm.smtp_from_name" placeholder="CardAuth" maxlength="50" />
+            </el-form-item>
+            <el-form-item label="提前提醒天数" prop="smtp_expire_days">
+              <el-input-number v-model="smtpForm.smtp_expire_days" :min="1" :max="30" />
+              <span class="form-tip">授权到期前 N 天发送邮件到联系人 QQ 邮箱</span>
+            </el-form-item>
+            <el-form-item>
+              <el-button type="primary" :loading="smtpSubmitting" @click="handleSaveSmtp" :icon="Check">保存配置</el-button>
+              <el-button @click="fetchSmtpConfig" :icon="RefreshRight">重置</el-button>
+              <el-popconfirm title="将向此地址发送测试邮件" @confirm="handleTestSmtp">
+                <template #reference>
+                  <el-button :loading="smtpTesting" :icon="Promotion">发送测试邮件</el-button>
+                </template>
+              </el-popconfirm>
+            </el-form-item>
+          </el-form>
+        </el-card>
+      </el-tab-pane>
     </el-tabs>
   </div>
 </template>
@@ -86,7 +141,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { OfficeBuilding, User, Check, RefreshRight } from '@element-plus/icons-vue'
+import { OfficeBuilding, User, Check, RefreshRight, Message, Promotion } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 import request from '@/api'
 
@@ -134,6 +189,7 @@ const roleText = computed(() => {
 onMounted(() => {
   fetchSiteConfig()
   fetchProfile()
+  fetchSmtpConfig()
 })
 
 async function fetchSiteConfig() {
@@ -214,18 +270,99 @@ async function handleSaveProfile() {
     finally { profileSubmitting.value = false }
   })
 }
+
+// ========== SMTP 配置 ==========
+const smtpFormRef = ref(null)
+const smtpLoading = ref(false)
+const smtpSubmitting = ref(false)
+const smtpTesting = ref(false)
+const smtpForm = ref({
+  smtp_host: '',
+  smtp_port: 465,
+  smtp_user: '',
+  smtp_pass: '',
+  smtp_encryption: 'ssl',
+  smtp_from_email: '',
+  smtp_from_name: 'CardAuth',
+  smtp_enabled: '0',
+  smtp_expire_days: 7,
+})
+
+async function fetchSmtpConfig() {
+  smtpLoading.value = true
+  try {
+    const res = await request.get('/system/smtp-config')
+    const data = res.data || {}
+    smtpForm.value.smtp_host = data.smtp_host || ''
+    smtpForm.value.smtp_port = parseInt(data.smtp_port || '465', 10)
+    smtpForm.value.smtp_user = data.smtp_user || ''
+    smtpForm.value.smtp_pass = data.smtp_pass || ''
+    smtpForm.value.smtp_encryption = data.smtp_encryption || 'ssl'
+    smtpForm.value.smtp_from_email = data.smtp_from_email || ''
+    smtpForm.value.smtp_from_name = data.smtp_from_name || 'CardAuth'
+    smtpForm.value.smtp_enabled = data.smtp_enabled || '0'
+    smtpForm.value.smtp_expire_days = parseInt(data.smtp_expire_days || '7', 10)
+  } catch (e) { /* */ }
+  finally { smtpLoading.value = false }
+}
+
+async function handleSaveSmtp() {
+  smtpSubmitting.value = true
+  try {
+    await request.post('/system/smtp-config', smtpForm.value)
+    ElMessage.success('SMTP 配置保存成功')
+  } catch (e) { /* */ }
+  finally { smtpSubmitting.value = false }
+}
+
+async function handleTestSmtp() {
+  smtpTesting.value = true
+  try {
+    const adminEmail = user.value?.email || smtpForm.value.smtp_user
+    if (!adminEmail) {
+      ElMessage.warning('请先完善当前管理员邮箱，或填写 SMTP 用户名')
+      return
+    }
+    await request.post('/system/test-smtp', { test_email: adminEmail })
+    ElMessage.success('测试邮件发送成功，请检查收件箱')
+  } catch (e) { /* */ }
+  finally { smtpTesting.value = false }
+}
 </script>
 
 <style scoped>
 .page-container {
   max-width: 900px;
 }
-.system-tabs :deep(.el-tabs__content) {
-  padding: 0;
+.system-tabs :deep(.el-tabs__content) { padding:0; }
+
+/* Tab 切换动画 */
+.system-tabs :deep(.el-tab-pane) {
+  animation: tabFadeIn .35s cubic-bezier(.4,0,.2,1);
 }
+@keyframes tabFadeIn {
+  from { opacity:0; transform:translateY(10px); }
+  to { opacity:1; transform:translateY(0); }
+}
+
+/* 导航条激活指示器过渡 */
+.system-tabs :deep(.el-tabs__active-bar) {
+  transition: transform .3s cubic-bezier(.4,0,.2,1), width .3s cubic-bezier(.4,0,.2,1) !important;
+}
+/* 标签项 hover 过渡 */
+.system-tabs :deep(.el-tabs__item) {
+  transition: color .25s ease !important;
+}
+.system-tabs :deep(.el-tabs__item:hover) {
+  color: #409eff;
+}
+
 .config-card {
   border-radius: 8px;
   margin-top: -1px;
+}
+.config-card:deep(.el-card__body) {
+  transition: padding .3s ease;
 }
 .card-header {
   display: flex;

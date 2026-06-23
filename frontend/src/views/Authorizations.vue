@@ -78,9 +78,10 @@
         <el-table-column prop="status" label="状态" width="100" align="center" sortable="custom" v-if="visibleColumns.status"><template #default="{ row }"><span v-if="row.status==='active' && !row.is_expired" class="status-pill status-active">有效</span><span v-else-if="row.is_expired" class="status-pill status-expired">已过期</span><span v-else-if="row.status==='revoked'" class="status-pill status-revoked">已撤销</span><span v-else class="status-pill status-unknown">{{ row.status }}</span></template></el-table-column>
         <el-table-column prop="expire_time" label="过期时间" width="180" sortable="custom" v-if="visibleColumns.expire_time"><template #default="{ row }"><span v-if="row.duration_days==0" class="text-success">永久有效</span><span v-else :class="{'text-danger':row.is_expired}">{{ row.expire_time || '-' }}</span></template></el-table-column>
         <el-table-column prop="authorized_at" label="授权时间" width="180" sortable="custom" v-if="visibleColumns.authorized_at" />
-        <el-table-column label="操作" width="180" fixed="right" align="center">
+        <el-table-column label="操作" width="210" fixed="right" align="center">
           <template #default="{ row }">
             <el-button size="small" type="primary" link :icon="View" @click="showDetail(row)">详情</el-button>
+            <el-button size="small" type="primary" link :icon="Edit" @click="showEditDialog(row)">编辑</el-button>
             <el-button v-if="row.status==='active'" size="small" type="danger" link @click="handleRevoke(row)">撤销</el-button>
             <el-button size="small" type="danger" link plain @click="handleDelete(row.id)">删除</el-button>
           </template>
@@ -118,6 +119,24 @@
         <el-form-item label="联系人名称"><el-input v-model="createForm.contact_name" placeholder="选填" maxlength="50" /></el-form-item>
       </el-form>
       <template #footer><el-button @click="createDialogVisible = false">取消</el-button><el-button type="primary" :loading="createLoading" @click="submitCreate">确认授权</el-button></template>
+    </el-dialog>
+
+    <!-- 编辑授权弹窗 -->
+    <el-dialog v-model="editDialogVisible" title="编辑授权" width="480px" :close-on-click-modal="false" destroy-on-close>
+      <el-form ref="editFormRef" :model="editForm" :rules="editRules" label-width="110px" v-if="editForm.id">
+        <el-form-item label="机器人QQ" prop="bot_qq"><el-input v-model="editForm.bot_qq" placeholder="5-15位数字" maxlength="15" /></el-form-item>
+        <el-form-item label="联系人QQ" prop="contact_qq"><el-input v-model="editForm.contact_qq" placeholder="5-15位数字" maxlength="15" /></el-form-item>
+        <el-form-item label="联系人名称"><el-input v-model="editForm.contact_name" placeholder="联系人称呼" maxlength="50" /></el-form-item>
+        <el-form-item label="有效天数" prop="duration_days">
+          <el-input-number v-model="editForm.duration_days" :min="0" :max="36500" />
+          <span class="form-tip" style="font-size:12px;color:#909399;margin-left:10px">0=永久</span>
+        </el-form-item>
+        <el-form-item label="过期时间">
+          <el-date-picker v-model="editForm.expire_time" type="datetime" placeholder="留空按有效天数计算" value-format="YYYY-MM-DD HH:mm:ss" :disabled-date="disabledDate" style="width:100%" :clearable="false" />
+        </el-form-item>
+        <el-form-item label="备注"><el-input v-model="editForm.remark" type="textarea" :rows="2" placeholder="选填" maxlength="255" show-word-limit /></el-form-item>
+      </el-form>
+      <template #footer><el-button @click="editDialogVisible = false">取消</el-button><el-button type="primary" :loading="editLoading" @click="submitEdit">保存修改</el-button></template>
     </el-dialog>
 
     <!-- 详情弹窗 -->
@@ -180,7 +199,7 @@ import { useColumnSettings } from '@/composables/useColumnSettings'
 import authorizationApi from '@/api/authorization'
 import request from '@/api'
 import { useUserStore } from '@/stores/user'
-import { Plus, Delete, Download, Search, Refresh, Filter, Setting, View, ArrowDown, Lock, CircleCheck, CircleClose, Timer } from '@element-plus/icons-vue'
+import { Plus, Delete, Download, Search, Refresh, Filter, Setting, View, Edit, ArrowDown, Lock, CircleCheck, CircleClose, Timer } from '@element-plus/icons-vue'
 
 const userStore = useUserStore()
 const user = computed(() => userStore.user)
@@ -283,6 +302,45 @@ async function showDetail(row) {
     detail.value = res.data
     detailDialogVisible.value = true
   } catch {}
+}
+
+// 编辑
+const editDialogVisible = ref(false)
+const editLoading = ref(false)
+const editFormRef = ref(null)
+const editForm = reactive({ id: null, bot_qq: '', contact_qq: '', contact_name: '', duration_days: 30, expire_time: '', remark: '' })
+const editRules = {
+  bot_qq: [{ required: true, message: '请输入机器人QQ', trigger: 'blur' }, { pattern: /^\d{5,15}$/, message: '请输入5-15位数字', trigger: 'blur' }],
+  contact_qq: [{ required: true, message: '请输入联系人QQ', trigger: 'blur' }, { pattern: /^\d{5,15}$/, message: '请输入5-15位数字', trigger: 'blur' }]
+}
+function disabledDate(time) { return time.getTime() < Date.now() - 86400000 }
+function showEditDialog(row) {
+  editForm.id = row.id
+  editForm.bot_qq = row.bot_qq || ''
+  editForm.contact_qq = row.contact_qq || ''
+  editForm.contact_name = row.contact_name || ''
+  editForm.duration_days = row.duration_days ?? 30
+  editForm.expire_time = row.expire_time || ''
+  editForm.remark = row.remark || ''
+  editDialogVisible.value = true
+}
+async function submitEdit() {
+  const valid = await editFormRef.value.validate().catch(() => false)
+  if (!valid) return
+  editLoading.value = true
+  try {
+    await authorizationApi.update(editForm.id, {
+      bot_qq: editForm.bot_qq,
+      contact_qq: editForm.contact_qq,
+      contact_name: editForm.contact_name,
+      duration_days: editForm.duration_days,
+      expire_time: editForm.expire_time,
+      remark: editForm.remark
+    })
+    ElMessage.success('授权更新成功')
+    editDialogVisible.value = false
+    fetchData(); fetchStats()
+  } finally { editLoading.value = false }
 }
 
 // 撤销

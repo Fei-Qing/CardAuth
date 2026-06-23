@@ -74,8 +74,8 @@
         <el-table-column prop="contact_name" label="联系人" width="110" v-if="visibleColumns.contact_name"><template #default="{ row }">{{ row.contact_name || '-' }}</template></el-table-column>
         <el-table-column prop="card_key" label="卡密" min-width="180" show-overflow-tooltip sortable="custom" v-if="visibleColumns.card_key" />
         <el-table-column prop="project_name" label="项目" width="130" sortable="custom" v-if="visibleColumns.project_name" />
-        <el-table-column prop="duration_days" label="有效天数" width="110" align="center" sortable="custom" v-if="visibleColumns.duration_days"><template #default="{ row }"><el-tag :type="row.duration_days==0?'success':'info'" size="small">{{ row.duration_days==0?'永久':row.duration_days+'天' }}</el-tag></template></el-table-column>
-        <el-table-column prop="status" label="状态" width="100" align="center" sortable="custom" v-if="visibleColumns.status"><template #default="{ row }"><el-tag v-if="row.status==='active' && !row.is_expired" type="success" size="small">有效</el-tag><el-tag v-else-if="row.is_expired" type="warning" size="small">已过期</el-tag><el-tag v-else-if="row.status==='revoked'" type="danger" size="small">已撤销</el-tag><el-tag v-else type="info" size="small">{{ row.status }}</el-tag></template></el-table-column>
+        <el-table-column prop="duration_days" label="有效天数" width="100" align="center" sortable="custom" v-if="visibleColumns.duration_days"><template #default="{ row }"><span class="days-pill" :class="row.duration_days==0?'days-permanent':'days-limited'">{{ row.duration_days==0?'永久':row.duration_days+'天' }}</span></template></el-table-column>
+        <el-table-column prop="status" label="状态" width="100" align="center" sortable="custom" v-if="visibleColumns.status"><template #default="{ row }"><span v-if="row.status==='active' && !row.is_expired" class="status-pill status-active">有效</span><span v-else-if="row.is_expired" class="status-pill status-expired">已过期</span><span v-else-if="row.status==='revoked'" class="status-pill status-revoked">已撤销</span><span v-else class="status-pill status-unknown">{{ row.status }}</span></template></el-table-column>
         <el-table-column prop="expire_time" label="过期时间" width="180" sortable="custom" v-if="visibleColumns.expire_time"><template #default="{ row }"><span v-if="row.duration_days==0" class="text-success">永久有效</span><span v-else :class="{'text-danger':row.is_expired}">{{ row.expire_time || '-' }}</span></template></el-table-column>
         <el-table-column prop="authorized_at" label="授权时间" width="180" sortable="custom" v-if="visibleColumns.authorized_at" />
         <el-table-column label="操作" width="180" fixed="right" align="center">
@@ -121,22 +121,47 @@
     </el-dialog>
 
     <!-- 详情弹窗 -->
-    <el-dialog v-model="detailDialogVisible" title="授权详情" width="600px" destroy-on-close>
-      <el-descriptions v-if="detail" :column="2" border>
-        <el-descriptions-item label="ID">{{ detail.id }}</el-descriptions-item>
-        <el-descriptions-item label="状态"><el-tag v-if="detail.status==='active' && !detail.is_expired" type="success">有效</el-tag><el-tag v-else-if="detail.is_expired" type="warning">已过期</el-tag><el-tag v-else type="danger">{{ detail.status }}</el-tag></el-descriptions-item>
-        <el-descriptions-item label="卡密" :span="2"><span class="mono-text">{{ detail.card_key }}</span></el-descriptions-item>
-        <el-descriptions-item label="项目">{{ detail.project_name }}</el-descriptions-item>
-        <el-descriptions-item label="机器人QQ"><span class="mono-text">{{ detail.bot_qq }}</span></el-descriptions-item>
-        <el-descriptions-item label="联系人QQ"><span class="mono-text">{{ detail.contact_qq }}</span></el-descriptions-item>
-        <el-descriptions-item label="联系人">{{ detail.contact_name || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="有效天数"><el-tag :type="detail.duration_days==0?'success':'info'">{{ detail.duration_days==0?'永久':detail.duration_days+'天' }}</el-tag></el-descriptions-item>
-        <el-descriptions-item label="授权时间">{{ detail.authorized_at }}</el-descriptions-item>
-        <el-descriptions-item label="过期时间"><span :class="{'text-danger':detail.is_expired}">{{ detail.duration_days==0?'永久有效':(detail.expire_time||'-') }}</span></el-descriptions-item>
-        <el-descriptions-item v-if="detail.revoked_at" label="撤销时间">{{ detail.revoked_at }}</el-descriptions-item>
-        <el-descriptions-item v-if="detail.revoke_reason" label="撤销原因" :span="2">{{ detail.revoke_reason }}</el-descriptions-item>
-        <el-descriptions-item label="备注" :span="2">{{ detail.remark || '-' }}</el-descriptions-item>
-      </el-descriptions>
+    <el-dialog v-model="detailDialogVisible" width="520px" destroy-on-close :show-close="false">
+      <template #header="{ close }">
+        <div class="detail-header">
+          <div class="detail-header-left">
+            <div class="detail-avatar" :class="detailStatusClass">
+              <svg v-if="detail?.status === 'active' && !detail?.is_expired" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              <svg v-else-if="detail?.is_expired" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              <svg v-else viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+            </div>
+            <div>
+              <h4 class="detail-header-title">授权详情 #{{ detail?.id }}</h4>
+              <p class="detail-header-sub">{{ detail?.project_name || '-' }}</p>
+            </div>
+          </div>
+          <div class="detail-header-right">
+            <span class="detail-status-badge" :class="detailStatusClass">{{ detailStatusText }}</span>
+            <button class="detail-close-btn" @click="close" type="button" aria-label="关闭"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+          </div>
+        </div>
+      </template>
+      <div v-if="detail" class="detail-body">
+        <div class="detail-row-group">
+          <span class="detail-row-label">机器人与联系人</span>
+          <div class="detail-row"><span class="detail-row-key">机器人QQ</span><span class="detail-row-val mono">{{ detail.bot_qq }}</span></div>
+          <div class="detail-row"><span class="detail-row-key">联系人QQ</span><span class="detail-row-val mono">{{ detail.contact_qq }}</span></div>
+          <div class="detail-row"><span class="detail-row-key">联系人</span><span class="detail-row-val">{{ detail.contact_name || '-' }}</span></div>
+        </div>
+        <div class="detail-row-group">
+          <span class="detail-row-label">授权信息</span>
+          <div class="detail-row"><span class="detail-row-key">项目</span><span class="detail-row-val">{{ detail.project_name || '-' }}</span></div>
+          <div class="detail-row"><span class="detail-row-key">有效天数</span><span class="detail-row-val"><span v-if="detail.duration_days == 0" class="detail-tag green">永久</span><span v-else class="detail-tag blue">{{ detail.duration_days }}天</span></span></div>
+          <div class="detail-row"><span class="detail-row-key">授权时间</span><span class="detail-row-val">{{ detail.authorized_at || '-' }}</span></div>
+          <div class="detail-row"><span class="detail-row-key">过期时间</span><span class="detail-row-val" :class="{ 'text-red': detail.is_expired }">{{ detail.duration_days == 0 ? '永久有效' : (detail.expire_time || '-') }}</span></div>
+        </div>
+        <div v-if="detail.revoked_at" class="detail-row-group">
+          <span class="detail-row-label">撤销记录</span>
+          <div class="detail-row"><span class="detail-row-key">撤销时间</span><span class="detail-row-val text-red">{{ detail.revoked_at }}</span></div>
+          <div class="detail-row" v-if="detail.revoke_reason"><span class="detail-row-key">撤销原因</span><span class="detail-row-val">{{ detail.revoke_reason }}</span></div>
+        </div>
+        <div v-if="detail.remark" class="detail-row-group"><span class="detail-row-label">备注</span><p class="detail-remark">{{ detail.remark }}</p></div>
+      </div>
     </el-dialog>
 
     <!-- 撤销确认弹窗 -->
@@ -240,6 +265,18 @@ async function submitCreate() {
 // 详情
 const detailDialogVisible = ref(false)
 const detail = ref(null)
+const detailStatusClass = computed(() => {
+  if (!detail.value) return ''
+  if (detail.value.is_expired) return 'expired'
+  if (detail.value.status === 'revoked') return 'revoked'
+  return 'active'
+})
+const detailStatusText = computed(() => {
+  if (!detail.value) return ''
+  if (detail.value.is_expired) return '已过期'
+  if (detail.value.status === 'revoked') return '已撤销'
+  return '有效'
+})
 async function showDetail(row) {
   try {
     const res = await authorizationApi.detail(row.id)
@@ -308,16 +345,54 @@ onMounted(() => {
 
 <style scoped>
 .authorizations-page { max-width:1600px; margin:0 auto; }
+
+/* ========== 统计卡片 ========== */
 .stats-row { margin-bottom:20px; }
+.stat-card { display:flex; align-items:center; gap:12px; padding:14px 18px; border-radius:12px; background:#fff; border:1px solid #f0f0f4; transition:all .25s; cursor:default; }
+.stat-card:hover { transform:translateY(-2px); box-shadow:0 4px 16px rgba(0,0,0,.05); }
+.stat-icon { width:40px; height:40px; border-radius:10px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.stat-icon :deep(.el-icon) { font-size:20px !important; }
+.stat-total .stat-icon { background:#eff6ff; color:#3b82f6; }
+.stat-active .stat-icon { background:#f0fdf4; color:#22c55e; }
+.stat-expired .stat-icon { background:#fef3c7; color:#f59e0b; }
+.stat-revoked .stat-icon { background:#fef2f2; color:#ef4444; }
+.stat-info { display:flex; flex-direction:column; min-width:0; }
+.stat-value { font-size:22px; font-weight:700; color:#1d1d1f; line-height:1.1; letter-spacing:-.3px; }
+.stat-label { font-size:12px; color:#9ca3af; margin-top:2px; font-weight:500; }
+
 /* ========== 主卡片 ========== */
-.advanced-search { padding:20px; background:#f5f7fa; border-radius:8px; margin-bottom:20px; }
+.main-card { margin-bottom:20px; border-radius:16px; border:1px solid #f0f0f4; }
+.main-card:deep(.el-card__body) { padding:24px; }
+.advanced-search { padding:20px 24px; background:#f8f9fb; border-radius:14px; margin-bottom:20px; border:1px solid #f0f0f4; }
 .search-form { display:flex; flex-wrap:wrap; gap:12px; }
-.toolbar { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; flex-wrap:wrap; gap:12px; }
-.toolbar-left,.toolbar-right { display:flex; gap:12px; flex-wrap:wrap; }
-.data-table :deep(.el-table__header th) { font-weight:600; color:#303133; }
-.mono-text { font-family:'Courier New',monospace; }
-.text-success { color:#67C23A; }
-.text-danger { color:#F56C6C; }
+.toolbar { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; flex-wrap:wrap; gap:12px; padding:0; }
+.toolbar-left,.toolbar-right { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+.toolbar :deep(.el-button) { border-radius:10px; font-weight:500; }
+
+/* ========== 表格 ========== */
+.data-table { border-radius:12px; overflow:hidden; }
+.data-table:deep(.el-table__header-wrapper) { border-radius:12px 12px 0 0; }
+.data-table:deep(.el-table__header th) { background:#f8f9fb; font-weight:600; color:#374151; font-size:13px; padding:14px 0; border-color:#f0f0f4; }
+.data-table:deep(.el-table__body td) { padding:12px 0; font-size:13px; color:#374151; border-color:#f5f5f7; }
+.data-table:deep(.el-table__row:hover > td) { background:#f8faff !important; }
+.data-table:deep(.el-table__row--striped td) { background:#fcfcfd; }
+.data-table:deep(.el-table__row--striped:hover > td) { background:#f8faff !important; }
+
+/* 状态 pill */
+.status-pill { display:inline-block; padding:3px 12px; border-radius:20px; font-size:12px; font-weight:600; letter-spacing:.2px; }
+.status-active { background:#f0fdf4; color:#16a34a; }
+.status-expired { background:#fef3c7; color:#d97706; }
+.status-revoked { background:#fef2f2; color:#dc2626; }
+.status-unknown { background:#f4f4f5; color:#71717a; }
+
+/* 有效天数 pill */
+.days-pill { display:inline-block; padding:3px 12px; border-radius:20px; font-size:12px; font-weight:600; }
+.days-permanent { background:#f0fdf4; color:#16a34a; }
+.days-limited { background:#eff6ff; color:#2563eb; }
+
+.mono-text { font-family:'SF Mono','Cascadia Code','Courier New',monospace; font-size:13px; letter-spacing:.2px; }
+.text-success { color:#16a34a; }
+.text-danger { color:#dc2626; }
 .pagination-wrapper { margin-top:20px; display:flex; justify-content:flex-end; }
 .column-settings { padding:8px; }
 .column-settings-title { font-weight:600; margin-bottom:12px; }
@@ -325,10 +400,49 @@ onMounted(() => {
 .expand-enter-active,.expand-leave-active { transition:all .3s ease; }
 .expand-enter-from,.expand-leave-to { opacity:0; max-height:0; overflow:hidden; }
 .expand-enter-to,.expand-leave-from { opacity:1; max-height:200px; }
+
+/* ========== 详情弹窗 ========== */
+.detail-header { display:flex; align-items:center; justify-content:space-between; padding:4px 0; }
+.detail-header-left { display:flex; align-items:center; gap:14px; }
+.detail-avatar { width:44px; height:44px; border-radius:12px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.detail-avatar.active { background:#f0f9eb; color:#67c23a; }
+.detail-avatar.expired { background:#fdf6ec; color:#e6a23c; }
+.detail-avatar.revoked { background:#fef0f0; color:#f56c6c; }
+.detail-header-title { font-size:16px; font-weight:700; color:#1d1d1f; margin:0; line-height:1.3; }
+.detail-header-sub { font-size:13px; color:#86868b; margin:2px 0 0; }
+.detail-header-right { display:flex; align-items:center; gap:10px; }
+.detail-status-badge { font-size:12px; font-weight:600; padding:4px 12px; border-radius:20px; letter-spacing:.3px; }
+.detail-status-badge.active { background:#f0f9eb; color:#67c23a; }
+.detail-status-badge.expired { background:#fdf6ec; color:#e6a23c; }
+.detail-status-badge.revoked { background:#fef0f0; color:#f56c6c; }
+.detail-close-btn { width:32px; height:32px; border-radius:50%; border:none; background:#f5f5f7; color:#86868b; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:all .2s; }
+.detail-close-btn:hover { background:#e8e8ed; color:#1d1d1f; }
+
+.detail-body { display:flex; flex-direction:column; gap:20px; margin-top:8px; }
+.detail-row-group { background:#f8f9fb; border-radius:12px; padding:16px 18px 14px; }
+.detail-row-label { display:block; font-size:11px; font-weight:700; color:#9ca3af; text-transform:uppercase; letter-spacing:.8px; margin-bottom:10px; }
+.detail-row { display:flex; justify-content:space-between; align-items:center; padding:7px 0; }
+.detail-row + .detail-row { border-top:1px solid #f0f0f4; }
+.detail-row-key { font-size:13px; color:#6e6e73; }
+.detail-row-val { font-size:13px; font-weight:600; color:#1d1d1f; text-align:right; max-width:60%; word-break:break-all; }
+.detail-row-val.mono { font-family:'SF Mono','Courier New',monospace; font-size:13px; letter-spacing:.3px; }
+.detail-tag { display:inline-block; padding:2px 10px; border-radius:6px; font-size:12px; font-weight:600; }
+.detail-tag.green { background:#f0f9eb; color:#67c23a; }
+.detail-tag.blue { background:#ecf5ff; color:#409eff; }
+.text-red { color:#f56c6c !important; }
+.detail-remark { font-size:13px; color:#1d1d1f; margin:0; line-height:1.6; }
+
 @media(max-width:768px){
   .toolbar { flex-direction:column; align-items:stretch; }
   .toolbar-left,.toolbar-right { width:100%; }
   .search-form { flex-direction:column; }
   .search-form .el-form-item,.search-form .el-select,.search-form .el-input { width:100% !important; }
+  .main-card:deep(.el-card__body) { padding:14px; }
+  .advanced-search { padding:14px; }
+  .stat-card { padding:10px 12px; }
+  .stat-icon { width:36px; height:36px; border-radius:8px; }
+  .stat-icon :deep(.el-icon) { font-size:18px !important; }
+  .stat-value { font-size:18px; }
+  .stat-label { font-size:11px; }
 }
 </style>

@@ -168,20 +168,8 @@
             <span v-else class="text-muted">-</span>
           </template>
         </el-table-column>
-        <el-table-column prop="duration_days" label="有效天数" width="110" align="center" sortable="custom" v-if="visibleColumns.duration_days">
-          <template #default="{ row }">
-            <el-tag :type="row.duration_days == 0 ? 'success' : 'info'" size="small">
-              {{ row.duration_days == 0 ? '永久' : row.duration_days + '天' }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="status" label="状态" width="100" align="center" sortable="custom" v-if="visibleColumns.status">
-          <template #default="{ row }">
-            <el-tag v-if="row.status === 'unused'" type="info" size="small">未使用</el-tag>
-            <el-tag v-else-if="row.status === 'used'" type="success" size="small">已使用</el-tag>
-            <el-tag v-else type="danger" size="small">已禁用</el-tag>
-          </template>
-        </el-table-column>
+        <el-table-column prop="duration_days" label="有效天数" width="100" align="center" sortable="custom" v-if="visibleColumns.duration_days"><template #default="{ row }"><span class="days-pill" :class="row.duration_days==0?'days-permanent':'days-limited'">{{ row.duration_days==0?'永久':row.duration_days+'天' }}</span></template></el-table-column>
+        <el-table-column prop="status" label="状态" width="100" align="center" sortable="custom" v-if="visibleColumns.status"><template #default="{ row }"><span class="status-pill" :class="'status-' + row.status">{{ row.status === 'unused' ? '未使用' : row.status === 'used' ? '已使用' : '已禁用' }}</span></template></el-table-column>
         <el-table-column prop="expire_time" label="过期时间" width="180" sortable="custom" v-if="visibleColumns.expire_time">
           <template #default="{ row }">
             <span v-if="row.duration_days == 0" class="text-success">永久有效</span>
@@ -258,42 +246,50 @@
     </el-dialog>
 
     <!-- ========== 详情弹窗 ========== -->
-    <el-dialog v-model="detailVisible" title="卡密详情" width="600px" destroy-on-close>
-      <el-descriptions :column="2" border v-if="detail">
-        <el-descriptions-item label="ID" :span="1">{{ detail.id }}</el-descriptions-item>
-        <el-descriptions-item label="状态" :span="1">
-          <el-tag v-if="detail.status === 'unused'" type="info">未使用</el-tag>
-          <el-tag v-else-if="detail.status === 'used'" type="success">已使用</el-tag>
-          <el-tag v-else type="danger">已禁用</el-tag>
-        </el-descriptions-item>
-        <el-descriptions-item label="卡密" :span="2">
-          <div class="card-key-detail">
-            <span class="mono-text">{{ detail.card_key }}</span>
-            <el-button type="primary" size="small" @click="copyToClipboard(detail.card_key)" :icon="DocumentCopy">复制</el-button>
+    <el-dialog v-model="detailVisible" width="520px" destroy-on-close :show-close="false">
+      <template #header="{ close }">
+        <div class="detail-header">
+          <div class="detail-header-left">
+            <div class="detail-avatar" :class="detailStatusClass">
+              <svg v-if="detail?.status === 'unused'" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              <svg v-else-if="detail?.status === 'used'" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              <svg v-else viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
+            </div>
+            <div>
+              <h4 class="detail-header-title">卡密详情 #{{ detail?.id }}</h4>
+              <p class="detail-header-sub">{{ detail?.project_name || '-' }}</p>
+            </div>
           </div>
-        </el-descriptions-item>
-        <el-descriptions-item label="项目" :span="1">{{ detail.project_name }}</el-descriptions-item>
-        <el-descriptions-item label="类型" :span="1">{{ detail.card_type_name }}</el-descriptions-item>
-        <el-descriptions-item label="有效天数" :span="1">
-          <el-tag :type="detail.duration_days == 0 ? 'success' : 'info'">
-            {{ detail.duration_days == 0 ? '永久' : detail.duration_days + '天' }}
-          </el-tag>
-        </el-descriptions-item>
-        <el-descriptions-item label="过期时间" :span="1">
-          <span v-if="detail.duration_days == 0" class="text-success">永久有效</span>
-          <span v-else>{{ detail.expire_time || '-' }}</span>
-        </el-descriptions-item>
-        <el-descriptions-item label="机器人QQ" :span="1">
-          <span v-if="detail.bot_qq" class="mono-text">{{ detail.bot_qq }}</span>
-          <span v-else class="text-muted">-</span>
-        </el-descriptions-item>
-        <el-descriptions-item label="绑定时间" :span="1">{{ detail.bound_at || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="生成时间" :span="2">{{ detail.created_at }}</el-descriptions-item>
-        <el-descriptions-item label="绑定信息" :span="2">
-          <pre v-if="detail.bind_info && Object.keys(detail.bind_info).length" class="bind-info-pre">{{ JSON.stringify(detail.bind_info, null, 2) }}</pre>
-          <span v-else class="text-muted">无</span>
-        </el-descriptions-item>
-      </el-descriptions>
+          <div class="detail-header-right">
+            <span class="detail-status-badge" :class="detailStatusClass">{{ detailStatusText }}</span>
+            <button class="detail-close-btn" @click="close" type="button" aria-label="关闭"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+          </div>
+        </div>
+      </template>
+      <div v-if="detail" class="detail-body">
+        <div class="detail-row-group">
+          <span class="detail-row-label">卡密信息</span>
+          <div class="detail-row"><span class="detail-row-key">卡密</span><span class="detail-row-val mono">{{ detail.card_key }}</span></div>
+          <div class="detail-row" style="justify-content:flex-end; border-top:none; padding-top:4px;"><el-button type="primary" size="small" @click="copyToClipboard(detail.card_key)" :icon="DocumentCopy" plain>复制卡密</el-button></div>
+        </div>
+        <div class="detail-row-group">
+          <span class="detail-row-label">套餐与项目</span>
+          <div class="detail-row"><span class="detail-row-key">项目</span><span class="detail-row-val">{{ detail.project_name || '-' }}</span></div>
+          <div class="detail-row"><span class="detail-row-key">类型</span><span class="detail-row-val">{{ detail.card_type_name }}</span></div>
+          <div class="detail-row"><span class="detail-row-key">有效天数</span><span class="detail-row-val"><span v-if="detail.duration_days == 0" class="detail-tag green">永久</span><span v-else class="detail-tag blue">{{ detail.duration_days }}天</span></span></div>
+          <div class="detail-row"><span class="detail-row-key">过期时间</span><span class="detail-row-val">{{ detail.duration_days == 0 ? '永久有效' : (detail.expire_time || '-') }}</span></div>
+          <div class="detail-row"><span class="detail-row-key">生成时间</span><span class="detail-row-val">{{ detail.created_at }}</span></div>
+        </div>
+        <div class="detail-row-group" v-if="detail.status !== 'unused'">
+          <span class="detail-row-label">使用记录</span>
+          <div class="detail-row"><span class="detail-row-key">机器人QQ</span><span class="detail-row-val mono">{{ detail.bot_qq || '-' }}</span></div>
+          <div class="detail-row"><span class="detail-row-key">绑定时间</span><span class="detail-row-val">{{ detail.bound_at || '-' }}</span></div>
+        </div>
+        <div class="detail-row-group" v-if="detail.bind_info && Object.keys(detail.bind_info).length">
+          <span class="detail-row-label">绑定详情</span>
+          <pre class="detail-remark">{{ JSON.stringify(detail.bind_info, null, 2) }}</pre>
+        </div>
+      </div>
     </el-dialog>
 
     <!-- ========== 导入弹窗 ========== -->
@@ -383,6 +379,7 @@ const selectedRows = ref([])
 const dateRange = ref([])
 const showAdvancedSearch = ref(true)
 const tableRef = ref(null)
+const statusMap = { unused: '未使用', used: '已使用', disabled: '已禁用' }
 const tableMaxHeight = ref(500)
 
 const filters = reactive({
@@ -435,6 +432,18 @@ const genCostPreview = computed(() => {
 // 详情
 const detailVisible = ref(false)
 const detail = ref(null)
+const detailStatusClass = computed(() => {
+  if (!detail.value) return ''
+  if (detail.value.status === 'used') return 'used'
+  if (detail.value.status === 'disabled') return 'revoked'
+  return 'unused'
+})
+const detailStatusText = computed(() => {
+  if (!detail.value) return ''
+  if (detail.value.status === 'used') return '已使用'
+  if (detail.value.status === 'disabled') return '已禁用'
+  return '未使用'
+})
 
 // 导入
 const importDialogVisible = ref(false)
@@ -840,96 +849,85 @@ function calculateTableHeight() {
 }
 
 /* ========== 工具栏 ========== */
-.toolbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-  flex-wrap: wrap;
-  gap: 12px;
-}
+/* ========== 统计卡片 ========== */
+.stats-row { margin-bottom:20px; }
+.stat-card { display:flex; align-items:center; gap:12px; padding:14px 18px; border-radius:12px; background:#fff; border:1px solid #f0f0f4; transition:all .25s; cursor:default; }
+.stat-card:hover { transform:translateY(-2px); box-shadow:0 4px 16px rgba(0,0,0,.05); }
+.stat-icon { width:40px; height:40px; border-radius:10px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.stat-icon :deep(.el-icon) { font-size:20px !important; }
+.stat-total .stat-icon { background:#eff6ff; color:#3b82f6; }
+.stat-unused .stat-icon { background:#f0fdf4; color:#22c55e; }
+.stat-used .stat-icon { background:#f5f3ff; color:#8b5cf6; }
+.stat-disabled .stat-icon { background:#fef2f2; color:#ef4444; }
+.stat-info { display:flex; flex-direction:column; min-width:0; }
+.stat-value { font-size:22px; font-weight:700; color:#1d1d1f; line-height:1.1; letter-spacing:-.3px; }
+.stat-label { font-size:12px; color:#9ca3af; margin-top:2px; font-weight:500; }
 
-.toolbar-left,
-.toolbar-right {
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-}
+/* ========== 主卡片 ========== */
+.main-card { margin-bottom:20px; border-radius:16px; border:1px solid #f0f0f4; }
+.main-card:deep(.el-card__body) { padding:24px; }
+
+.toolbar-left,.toolbar-right { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+.toolbar :deep(.el-button) { border-radius:10px; font-weight:500; }
 
 /* ========== 表格 ========== */
-.cards-table {
-  width: 100%;
-}
+.data-table { border-radius:12px; overflow:hidden; }
+.data-table:deep(.el-table__header-wrapper) { border-radius:12px 12px 0 0; }
+.data-table:deep(.el-table__header th) { background:#f8f9fb; font-weight:600; color:#374151; font-size:13px; padding:14px 0; border-color:#f0f0f4; }
+.data-table:deep(.el-table__body td) { padding:12px 0; font-size:13px; color:#374151; border-color:#f5f5f7; }
+.data-table:deep(.el-table__row:hover > td) { background:#f8faff !important; }
+.data-table:deep(.el-table__row--striped td) { background:#fcfcfd; }
+.data-table:deep(.el-table__row--striped:hover > td) { background:#f8faff !important; }
 
-.cards-table :deep(.el-table__header) {
-  background: #f5f7fa;
-}
+/* 状态 pill */
+.status-pill { display:inline-block; padding:3px 12px; border-radius:20px; font-size:12px; font-weight:600; letter-spacing:.2px; }
+.status-unused { background:#f4f4f5; color:#71717a; }
+.status-used { background:#f0fdf4; color:#16a34a; }
+.status-disabled { background:#fef2f2; color:#dc2626; }
 
-.cards-table :deep(.el-table__header th) {
-  font-weight: 600;
-  color: #303133;
-}
+/* 有效天数 pill */
+.days-pill { display:inline-block; padding:3px 12px; border-radius:20px; font-size:12px; font-weight:600; }
+.days-permanent { background:#f0fdf4; color:#16a34a; }
+.days-limited { background:#eff6ff; color:#2563eb; }
 
-.cards-table :deep(.el-table__row) {
-  transition: background 0.2s ease;
-}
+.card-key-cell { display:flex; align-items:center; gap:8px; }
+.copy-icon { cursor:pointer; color:#9ca3af; transition:color .2s; font-size:15px; }
+.copy-icon:hover { color:#3b82f6; }
+.card-key-text { font-family:'SF Mono','Cascadia Code','Courier New',monospace; font-size:13px; letter-spacing:.2px; }
 
-.cards-table :deep(.el-table__row:hover > td) {
-  background: #ecf5ff !important;
-}
+.mono-text { font-family:'SF Mono','Cascadia Code','Courier New',monospace; font-size:13px; letter-spacing:.2px; }
+.text-muted { color:#d1d5db; }
+.text-success { color:#16a34a; }
+.text-danger { color:#dc2626; }
 
-.card-key-cell {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.copy-icon {
-  cursor: pointer;
-  color: #409EFF;
-  transition: color 0.2s ease;
-}
-
-.copy-icon:hover {
-  color: #66b1ff;
-}
-
-.card-key-text {
-  font-family: 'Courier New', monospace;
-  font-size: 13px;
-}
-
-.mono-text {
-  font-family: 'Courier New', monospace;
-}
-
-.text-muted {
-  color: #c0c4cc;
-}
-
-.text-success {
-  color: #67C23A;
-}
-
-.text-danger {
-  color: #F56C6C;
-}
-
-.card-key-detail {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.bind-info-pre {
-  font-size: 12px;
-  max-height: 200px;
-  overflow: auto;
-  background: #f5f7fa;
-  padding: 12px;
-  border-radius: 4px;
-  margin: 0;
-}
+/* ========== 详情弹窗 ========== */
+.detail-header { display:flex; align-items:center; justify-content:space-between; padding:4px 0; }
+.detail-header-left { display:flex; align-items:center; gap:14px; }
+.detail-avatar { width:44px; height:44px; border-radius:12px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.detail-avatar.unused { background:#f4f4f5; color:#909399; }
+.detail-avatar.used { background:#f0f9eb; color:#67c23a; }
+.detail-avatar.revoked { background:#fef0f0; color:#f56c6c; }
+.detail-header-title { font-size:16px; font-weight:700; color:#1d1d1f; margin:0; line-height:1.3; }
+.detail-header-sub { font-size:13px; color:#86868b; margin:2px 0 0; }
+.detail-header-right { display:flex; align-items:center; gap:10px; }
+.detail-status-badge { font-size:12px; font-weight:600; padding:4px 12px; border-radius:20px; letter-spacing:.3px; }
+.detail-status-badge.unused { background:#f4f4f5; color:#909399; }
+.detail-status-badge.used { background:#f0f9eb; color:#67c23a; }
+.detail-status-badge.revoked { background:#fef0f0; color:#f56c6c; }
+.detail-close-btn { width:32px; height:32px; border-radius:50%; border:none; background:#f5f5f7; color:#86868b; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:all .2s; }
+.detail-close-btn:hover { background:#e8e8ed; color:#1d1d1f; }
+.detail-body { display:flex; flex-direction:column; gap:20px; margin-top:8px; }
+.detail-row-group { background:#f8f9fb; border-radius:12px; padding:16px 18px 14px; }
+.detail-row-label { display:block; font-size:11px; font-weight:700; color:#9ca3af; text-transform:uppercase; letter-spacing:.8px; margin-bottom:10px; }
+.detail-row { display:flex; justify-content:space-between; align-items:center; padding:7px 0; }
+.detail-row + .detail-row { border-top:1px solid #f0f0f4; }
+.detail-row-key { font-size:13px; color:#6e6e73; }
+.detail-row-val { font-size:13px; font-weight:600; color:#1d1d1f; text-align:right; max-width:60%; word-break:break-all; }
+.detail-row-val.mono { font-family:'SF Mono','Courier New',monospace; font-size:13px; letter-spacing:.3px; }
+.detail-tag { display:inline-block; padding:2px 10px; border-radius:6px; font-size:12px; font-weight:600; }
+.detail-tag.green { background:#f0f9eb; color:#67c23a; }
+.detail-tag.blue { background:#ecf5ff; color:#409eff; }
+.detail-remark { font-size:12px; color:#1d1d1f; margin:0; line-height:1.6; max-height:200px; overflow:auto; background:#f0f0f4; padding:12px; border-radius:8px; }
 
 /* ========== 分页 ========== */
 .pagination-wrapper {

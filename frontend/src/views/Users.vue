@@ -135,35 +135,57 @@
       <template #footer><el-button @click="dialogVisible = false">取消</el-button><el-button type="primary" :loading="submitLoading" @click="handleSubmit">{{ isEdit ? '保存修改' : '确认创建' }}</el-button></template>
     </el-dialog>
 
-    <!-- 详情抽屉 -->
-    <el-drawer v-model="detailVisible" title="用户详情" size="500px" direction="rtl">
-      <div v-if="currentUser" class="detail-content">
+    <!-- 详情弹窗 -->
+    <el-dialog v-model="detailVisible" width="520px" destroy-on-close :show-close="false">
+      <template #header="{ close }">
         <div class="detail-header">
-          <el-avatar :size="80" :src="currentUser.avatar" :icon="UserFilled">{{ currentUser.nickname?.charAt(0) || currentUser.username.charAt(0) }}</el-avatar>
-          <div class="detail-header-info">
-            <h3>{{ currentUser.nickname || currentUser.username }}</h3>
-            <el-tag :type="getRoleTagType(currentUser.role)" effect="dark">{{ getRoleLabel(currentUser.role) }}</el-tag>
-            <el-tag :type="currentUser.status === 1 ? 'success' : 'danger'" size="small">{{ currentUser.status === 1 ? '正常' : '禁用' }}</el-tag>
+          <div class="detail-header-left">
+            <div class="detail-avatar" :class="currentUser?.status === 1 ? 'active' : 'disabled'">
+              <svg v-if="currentUser?.status === 1" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              <svg v-else viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
+            </div>
+            <div>
+              <h4 class="detail-header-title">{{ currentUser?.nickname || currentUser?.username }}</h4>
+              <p class="detail-header-sub">ID: #{{ currentUser?.id }} · {{ currentUser?.username }}</p>
+            </div>
+          </div>
+          <div class="detail-header-right">
+            <span class="detail-status-badge" :class="currentUser?.status === 1 ? 'active' : 'disabled'">{{ currentUser?.status === 1 ? '正常' : '已禁用' }}</span>
+            <button class="detail-close-btn" @click="close" type="button" aria-label="关闭"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
           </div>
         </div>
-        <el-descriptions :column="1" border>
-          <el-descriptions-item label="用户ID">{{ currentUser.id }}</el-descriptions-item>
-          <el-descriptions-item label="用户名">{{ currentUser.username }}</el-descriptions-item>
-          <el-descriptions-item label="昵称">{{ currentUser.nickname || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="邮箱">{{ currentUser.email || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="角色"><el-tag :type="getRoleTagType(currentUser.role)">{{ getRoleLabel(currentUser.role) }}</el-tag></el-descriptions-item>
-          <el-descriptions-item label="状态"><el-tag :type="currentUser.status === 1 ? 'success' : 'danger'">{{ currentUser.status === 1 ? '正常' : '禁用' }}</el-tag></el-descriptions-item>
-          <el-descriptions-item label="最后登录时间">{{ currentUser.last_login_at || '从未登录' }}</el-descriptions-item>
-          <el-descriptions-item label="最后登录IP">{{ currentUser.last_login_ip || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="创建时间">{{ currentUser.created_at }}</el-descriptions-item>
-          <el-descriptions-item label="备注" v-if="currentUser.remark">{{ currentUser.remark }}</el-descriptions-item>
-        </el-descriptions>
+      </template>
+      <div v-if="currentUser" class="detail-body">
+        <div class="detail-row-group">
+          <span class="detail-row-label">基本信息</span>
+          <div class="detail-row"><span class="detail-row-key">用户名</span><span class="detail-row-val">{{ currentUser.username }}</span></div>
+          <div class="detail-row"><span class="detail-row-key">昵称</span><span class="detail-row-val">{{ currentUser.nickname || '-' }}</span></div>
+          <div class="detail-row"><span class="detail-row-key">邮箱</span><span class="detail-row-val">{{ currentUser.email || '-' }}</span></div>
+        </div>
+        <div class="detail-row-group">
+          <span class="detail-row-label">角色与状态</span>
+          <div class="detail-row"><span class="detail-row-key">角色</span><span class="detail-row-val"><span class="role-pill" :class="'role-' + currentUser.role">{{ getRoleLabel(currentUser.role) }}</span></span></div>
+          <div class="detail-row"><span class="detail-row-key">状态</span><span class="detail-row-val"><span :class="currentUser.status === 1 ? 'text-success' : 'text-danger'">{{ currentUser.status === 1 ? '正常' : '已禁用' }}</span></span></div>
+        </div>
+        <div class="detail-row-group">
+          <span class="detail-row-label">登录记录</span>
+          <div class="detail-row"><span class="detail-row-key">最后登录</span><span class="detail-row-val">{{ currentUser.last_login_at || '从未登录' }}</span></div>
+          <div class="detail-row"><span class="detail-row-key">登录 IP</span><span class="detail-row-val mono">{{ currentUser.last_login_ip || '-' }}</span></div>
+        </div>
+        <div class="detail-row-group">
+          <span class="detail-row-label">时间</span>
+          <div class="detail-row"><span class="detail-row-key">创建时间</span><span class="detail-row-val">{{ currentUser.created_at }}</span></div>
+        </div>
+        <div v-if="currentUser.remark" class="detail-row-group">
+          <span class="detail-row-label">备注</span>
+          <p class="detail-remark">{{ currentUser.remark }}</p>
+        </div>
         <div class="detail-actions">
           <el-button type="primary" @click="showEditDialog(currentUser)">编辑用户</el-button>
           <el-button type="danger" @click="handleDelete(currentUser)" :disabled="currentUser.role === 'admin'">删除用户</el-button>
         </div>
       </div>
-    </el-drawer>
+    </el-dialog>
   </div>
 </template>
 
@@ -382,15 +404,97 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.user-cell { display: flex; align-items: center; gap: 10px; }
-.user-info { display: flex; flex-direction: column; }
-.user-name { font-weight: 500; }
-.user-id { font-size: 12px; color: #909399; }
-.time-cell { display: flex; align-items: center; gap: 6px; }
-.detail-content { padding: 0 10px; }
-.detail-header { display: flex; align-items: center; gap: 20px; margin-bottom: 24px; }
-.detail-header-info h3 { margin: 0 0 10px 0; }
-.detail-actions { margin-top: 24px; display: flex; gap: 12px; }
-.role-option { display: flex; align-items: center; gap: 8px; }
-.role-desc { color: #909399; font-size: 12px; }
+.users-page { max-width:1600px; margin:0 auto; }
+
+/* ========== 统计卡片 ========== */
+.stats-row { margin-bottom:20px; }
+.stat-card { display:flex; align-items:center; gap:12px; padding:14px 18px; border-radius:12px; background:#fff; border:1px solid #f0f0f4; transition:all .25s; cursor:default; }
+.stat-card:hover { transform:translateY(-2px); box-shadow:0 4px 16px rgba(0,0,0,.05); }
+.stat-icon { width:40px; height:40px; border-radius:10px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.stat-icon :deep(.el-icon) { font-size:20px !important; }
+.stat-total .stat-icon { background:#eff6ff; color:#3b82f6; }
+.stat-admin .stat-icon { background:#fef2f2; color:#ef4444; }
+.stat-project .stat-icon { background:#eff6ff; color:#3b82f6; }
+.stat-agent .stat-icon { background:#fef3c7; color:#f59e0b; }
+.stat-info { display:flex; flex-direction:column; min-width:0; }
+.stat-value { font-size:22px; font-weight:700; color:#1d1d1f; line-height:1.1; letter-spacing:-.3px; }
+.stat-label { font-size:12px; color:#9ca3af; margin-top:2px; font-weight:500; }
+
+/* ========== 主卡片 ========== */
+.main-card { margin-bottom:20px; border-radius:16px; border:1px solid #f0f0f4; }
+.main-card:deep(.el-card__body) { padding:24px; }
+.advanced-search { padding:20px 24px; background:#f8f9fb; border-radius:14px; margin-bottom:20px; border:1px solid #f0f0f4; }
+.search-form { display:flex; flex-wrap:wrap; gap:12px; }
+.toolbar { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; flex-wrap:wrap; gap:12px; padding:0; }
+.toolbar-left,.toolbar-right { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+.toolbar :deep(.el-button) { border-radius:10px; font-weight:500; }
+
+/* ========== 表格 ========== */
+.data-table { border-radius:12px; overflow:hidden; }
+.data-table:deep(.el-table__header-wrapper) { border-radius:12px 12px 0 0; }
+.data-table:deep(.el-table__header th) { background:#f8f9fb; font-weight:600; color:#374151; font-size:13px; padding:14px 0; border-color:#f0f0f4; }
+.data-table:deep(.el-table__body td) { padding:12px 0; font-size:13px; color:#374151; border-color:#f5f5f7; }
+.data-table:deep(.el-table__row:hover > td) { background:#f8faff !important; }
+.data-table:deep(.el-table__row--striped td) { background:#fcfcfd; }
+.data-table:deep(.el-table__row--striped:hover > td) { background:#f8faff !important; }
+
+.user-cell { display:flex; align-items:center; gap:10px; }
+.user-info { display:flex; flex-direction:column; }
+.user-name { font-weight:500; }
+.user-id { font-size:12px; color:#909399; }
+.time-cell { display:flex; align-items:center; gap:6px; }
+
+/* ========== 详情弹窗 ========== */
+.detail-header { display:flex; align-items:center; justify-content:space-between; padding:4px 0; }
+.detail-header-left { display:flex; align-items:center; gap:14px; }
+.detail-avatar { width:44px; height:44px; border-radius:12px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.detail-avatar.active { background:#f0f9eb; color:#67c23a; }
+.detail-avatar.disabled { background:#fef0f0; color:#f56c6c; }
+.detail-header-title { font-size:16px; font-weight:700; color:#1d1d1f; margin:0; line-height:1.3; }
+.detail-header-sub { font-size:13px; color:#86868b; margin:2px 0 0; }
+.detail-header-right { display:flex; align-items:center; gap:10px; }
+.detail-status-badge { font-size:12px; font-weight:600; padding:4px 12px; border-radius:20px; letter-spacing:.3px; }
+.detail-status-badge.active { background:#f0f9eb; color:#67c23a; }
+.detail-status-badge.disabled { background:#fef0f0; color:#f56c6c; }
+.detail-close-btn { width:32px; height:32px; border-radius:50%; border:none; background:#f5f5f7; color:#86868b; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:all .2s; }
+.detail-close-btn:hover { background:#e8e8ed; color:#1d1d1f; }
+.detail-body { display:flex; flex-direction:column; gap:20px; margin-top:8px; }
+.detail-row-group { background:#f8f9fb; border-radius:12px; padding:16px 18px 14px; }
+.detail-row-label { display:block; font-size:11px; font-weight:700; color:#9ca3af; text-transform:uppercase; letter-spacing:.8px; margin-bottom:10px; }
+.detail-row { display:flex; justify-content:space-between; align-items:center; padding:7px 0; }
+.detail-row + .detail-row { border-top:1px solid #f0f0f4; }
+.detail-row-key { font-size:13px; color:#6e6e73; }
+.detail-row-val { font-size:13px; font-weight:600; color:#1d1d1f; text-align:right; max-width:60%; word-break:break-all; }
+.detail-row-val.mono { font-family:'SF Mono','Courier New',monospace; font-size:13px; letter-spacing:.3px; }
+.detail-remark { font-size:13px; color:#1d1d1f; margin:0; line-height:1.6; }
+.detail-actions { margin-top:4px; display:flex; gap:12px; justify-content:flex-end; }
+
+/* 角色 pill */
+.role-pill { display:inline-block; padding:3px 12px; border-radius:20px; font-size:12px; font-weight:600; letter-spacing:.2px; }
+.role-pill.role-admin { background:#fef2f2; color:#dc2626; }
+.role-pill.role-project_admin { background:#eff6ff; color:#2563eb; }
+.role-pill.role-agent { background:#fef3c7; color:#d97706; }
+.role-pill.role-user { background:#f4f4f5; color:#71717a; }
+.text-success { color:#16a34a; }
+.text-danger { color:#dc2626; }
+.role-option { display:flex; align-items:center; gap:8px; }
+.role-desc { color:#909399; font-size:12px; }
+.pagination-wrapper { margin-top:20px; display:flex; justify-content:flex-end; }
+
+@media(max-width:768px){
+  .toolbar { flex-direction:column; align-items:stretch; }
+  .toolbar-left,.toolbar-right { width:100%; }
+  .search-form { flex-direction:column; }
+  .search-form .el-form-item,.search-form .el-select,.search-form .el-input { width:100% !important; }
+  .main-card:deep(.el-card__body) { padding:14px; }
+  .advanced-search { padding:14px; }
+  .stat-card { padding:10px 12px; }
+  .stat-icon { width:36px; height:36px; border-radius:8px; }
+  .stat-icon :deep(.el-icon) { font-size:18px !important; }
+  .stat-value { font-size:18px; }
+  .stat-label { font-size:11px; }
+}
+@media(max-width:480px){
+  .stats-row :deep(.el-col) { margin-bottom:12px; }
+}
 </style>

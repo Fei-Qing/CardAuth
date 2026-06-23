@@ -43,6 +43,7 @@ $router->group('api/public', function ($router) {
     // 支付回调
     $router->get('payment/notify', [PublicController::class, 'paymentNotify']);
     $router->post('payment/notify', [PublicController::class, 'paymentNotify']);
+    $router->post('payment/complete', [PublicController::class, 'paymentComplete']);
 
     // 授权查询与在线授权（公开接口）
     $router->get('authorizations/query', [AuthorizationController::class, 'queryByBot']);

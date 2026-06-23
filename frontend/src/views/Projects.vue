@@ -235,16 +235,42 @@ async function deleteCardType(row) {
 
 <style scoped>
 .projects-page { max-width:1600px; margin:0 auto; }
+
+/* ========== 统计卡片 ========== */
 .stats-row { margin-bottom:20px; }
+.stat-card { display:flex; align-items:center; gap:12px; padding:14px 18px; border-radius:12px; background:#fff; border:1px solid #f0f0f4; transition:all .25s; cursor:default; }
+.stat-card:hover { transform:translateY(-2px); box-shadow:0 4px 16px rgba(0,0,0,.05); }
+.stat-icon { width:40px; height:40px; border-radius:10px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.stat-icon :deep(.el-icon) { font-size:20px !important; }
+.stat-total .stat-icon { background:#eff6ff; color:#3b82f6; }
+.stat-active .stat-icon { background:#f0fdf4; color:#22c55e; }
+.stat-inactive .stat-icon { background:#fef2f2; color:#ef4444; }
+
+.stat-info { display:flex; flex-direction:column; min-width:0; }
+.stat-value { font-size:22px; font-weight:700; color:#1d1d1f; line-height:1.1; letter-spacing:-.3px; }
+.stat-label { font-size:12px; color:#9ca3af; margin-top:2px; font-weight:500; }
+
 /* ========== 主卡片 ========== */
-.advanced-search { padding:20px; background:#f5f7fa; border-radius:8px; margin-bottom:20px; }
+.main-card { margin-bottom:20px; border-radius:16px; border:1px solid #f0f0f4; }
+.main-card:deep(.el-card__body) { padding:24px; }
+.advanced-search { padding:20px 24px; background:#f8f9fb; border-radius:14px; margin-bottom:20px; border:1px solid #f0f0f4; }
 .search-form { display:flex; flex-wrap:wrap; gap:12px; }
-.toolbar { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; flex-wrap:wrap; gap:12px; }
-.toolbar-left,.toolbar-right { display:flex; gap:12px; flex-wrap:wrap; }
-.data-table :deep(.el-table__header th) { font-weight:600; color:#303133; }
+.toolbar { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; flex-wrap:wrap; gap:12px; padding:0; }
+.toolbar-left,.toolbar-right { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+.toolbar :deep(.el-button) { border-radius:10px; font-weight:500; }
+
+/* ========== 表格 ========== */
+.data-table { border-radius:12px; overflow:hidden; }
+.data-table:deep(.el-table__header-wrapper) { border-radius:12px 12px 0 0; }
+.data-table:deep(.el-table__header th) { background:#f8f9fb; font-weight:600; color:#374151; font-size:13px; padding:14px 0; border-color:#f0f0f4; }
+.data-table:deep(.el-table__body td) { padding:12px 0; font-size:13px; color:#374151; border-color:#f5f5f7; }
+.data-table:deep(.el-table__row:hover > td) { background:#f8faff !important; }
+.data-table:deep(.el-table__row--striped td) { background:#fcfcfd; }
+.data-table:deep(.el-table__row--striped:hover > td) { background:#f8faff !important; }
 .key-cell { display:flex; align-items:center; gap:8px; }
-.copy-icon { color:#409EFF; cursor:pointer; }
-.mono-text { font-family:'Courier New',monospace; }
+.copy-icon { color:#9ca3af; cursor:pointer; }
+.copy-icon:hover { color:#3b82f6; }
+.mono-text { font-family:'SF Mono',Cascadia Code,Courier New,monospace; font-size:13px; letter-spacing:.2px; }
 .pagination-wrapper { margin-top:20px; display:flex; justify-content:flex-end; }
 .column-settings { padding:8px; }
 .column-settings-title { font-weight:600; margin-bottom:12px; }
@@ -252,10 +278,21 @@ async function deleteCardType(row) {
 .expand-enter-active,.expand-leave-active { transition:all .3s ease; }
 .expand-enter-from,.expand-leave-to { opacity:0; max-height:0; overflow:hidden; }
 .expand-enter-to,.expand-leave-from { opacity:1; max-height:200px; }
+
 @media(max-width:768px){
   .toolbar { flex-direction:column; align-items:stretch; }
   .toolbar-left,.toolbar-right { width:100%; }
   .search-form { flex-direction:column; }
   .search-form .el-form-item,.search-form .el-select,.search-form .el-input { width:100% !important; }
+  .main-card:deep(.el-card__body) { padding:14px; }
+  .advanced-search { padding:14px; }
+  .stat-card { padding:10px 12px; }
+  .stat-icon { width:36px; height:36px; border-radius:8px; }
+  .stat-icon :deep(.el-icon) { font-size:18px !important; }
+  .stat-value { font-size:18px; }
+  .stat-label { font-size:11px; }
+}
+@media(max-width:480px){
+  .stats-row :deep(.el-col) { margin-bottom:12px; }
 }
 </style>

@@ -84,7 +84,7 @@ class PublicController extends Controller
             $this->error('套餐不存在或已下架');
         }
 
-        if ((float) $cardType['price'] <= 0) {
+        if ((float) $cardType['price'] < 0) {
             $this->error('套餐价格配置错误');
         }
 
@@ -120,6 +120,23 @@ class PublicController extends Controller
             $finalAmount = max(0.01, round($originalAmount - $discountAmount, 2));
         }
 
+        // 检查机器人QQ是否已有授权记录（续费场景 + 联系人QQ一致性检查）
+        $existingAuth = null;
+        $contactQqWarn = '';
+        if ($botQq && $contactQq) {
+            $existingAuth = $db->fetch(
+                "SELECT id, bot_qq, contact_qq, project_id, expire_time, status FROM {$db->table('authorizations')} WHERE bot_qq = ? LIMIT 1",
+                [$botQq]
+            );
+            if ($existingAuth) {
+                // 联系人QQ与历史记录不一致：覆盖为历史QQ并提示
+                if ($existingAuth['contact_qq'] !== $contactQq) {
+                    $contactQqWarn = "联系人QQ与历史记录不一致（当前提交: {$contactQq}，历史: {$existingAuth['contact_qq']}），已自动更改为历史联系人QQ。如确需更改联系人QQ请联系项目管理员。";
+                    $contactQq = $existingAuth['contact_qq'];
+                }
+            }
+        }
+
         // 生成订单号
         $orderNo = date('YmdHis') . rand(10000, 99999);
 
@@ -127,8 +144,8 @@ class PublicController extends Controller
         $expiredAt = date('Y-m-d H:i:s', strtotime("+{$expireMinutes} minutes"));
 
         $orderId = $db->insert(
-            "INSERT INTO {$db->table('orders')} (order_no, project_id, card_type_id, amount, pay_amount, pay_type, status, contact_info, coupon_code, expired_at, created_at)
-             VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, NOW())",
+            "INSERT INTO {$db->table('orders')} (order_no, project_id, card_type_id, amount, pay_amount, pay_type, status, contact_info, bot_qq, contact_qq, coupon_code, expired_at, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, NOW())",
             [
                 $orderNo,
                 $projectId,
@@ -137,6 +154,8 @@ class PublicController extends Controller
                 $finalAmount,
                 $payType,
                 $contactInfo,
+                $botQq,
+                $contactQq,
                 $couponCode,
                 $expiredAt,
             ]
@@ -150,18 +169,49 @@ class PublicController extends Controller
             );
         }
 
+        // 免费商品直接完成订单并授权
+        if ($finalAmount <= 0) {
+            $orderController = new OrderController();
+            $orderController->processOrderPaid($orderId);
+            
+            $auth = $db->fetch(
+                "SELECT bot_qq, contact_qq, expire_time, project_name 
+                 FROM {$db->table('authorizations')} WHERE bot_qq = ? AND contact_qq = ?",
+                [$botQq, $contactQq]
+            );
+            
+            $this->success([
+                'order_id'        => $orderId,
+                'order_no'        => $orderNo,
+                'amount'          => $originalAmount,
+                'pay_amount'      => $finalAmount,
+                'coupon_code'     => $couponCode,
+                'bot_qq'          => $auth['bot_qq'] ?? $botQq,
+                'contact_qq'      => $auth['contact_qq'] ?? $contactQq,
+                'project_name'    => $auth['project_name'] ?? '',
+                'expire_time'     => $auth['expire_time'] ?? null,
+                'status'          => 'paid',
+                'is_renew'        => $existingAuth ? true : false,
+                'contact_qq_warn' => $contactQqWarn ?: null,
+            ], $contactQqWarn ?: '领取成功');
+            return;
+        }
+
         // 构建支付参数
         $payUrl = $this->buildPayUrl($orderNo, $finalAmount, $payType, $project['name'] . ' - ' . $cardType['name']);
 
         $this->success([
-            'order_id'    => $orderId,
-            'order_no'    => $orderNo,
-            'amount'      => $originalAmount,
-            'pay_amount'  => $finalAmount,
-            'coupon_code' => $couponCode,
-            'pay_url'     => $payUrl,
-            'expired_at'  => $expiredAt,
-        ], '订单创建成功');
+            'order_id'        => $orderId,
+            'order_no'        => $orderNo,
+            'amount'          => $originalAmount,
+            'pay_amount'      => $finalAmount,
+            'coupon_code'     => $couponCode,
+            'pay_url'         => $payUrl,
+            'expired_at'      => $expiredAt,
+            'is_renew'        => $existingAuth ? true : false,
+            'contact_qq'      => $contactQq,
+            'contact_qq_warn' => $contactQqWarn ?: null,
+        ], $contactQqWarn ?: '订单创建成功');
     }
 
     /**
@@ -175,6 +225,16 @@ class PublicController extends Controller
         $appKey = $this->getPaymentConfig('payment_app_key', config('app.payment.app_key', ''));
         $notifyUrl = config('app.payment.notify_url', '');
         $returnUrl = config('app.payment.return_url', '');
+
+        // 相对URL补全为绝对URL（以当前请求的 scheme+host 为基准）
+        $currentOrigin = ($_SERVER['HTTPS'] ?? 'off') === 'on' ? 'https://' : 'http://';
+        $currentOrigin .= $_SERVER['HTTP_HOST'] ?? $_SERVER['SERVER_NAME'] ?? 'localhost';
+        if ($notifyUrl && !parse_url($notifyUrl, PHP_URL_HOST)) {
+            $notifyUrl = $currentOrigin . (str_starts_with($notifyUrl, '/') ? '' : '/') . $notifyUrl;
+        }
+        if ($returnUrl && !parse_url($returnUrl, PHP_URL_HOST)) {
+            $returnUrl = $currentOrigin . (str_starts_with($returnUrl, '/') ? '' : '/') . $returnUrl;
+        }
 
         $typeMap = ['alipay' => 'alipay', 'wxpay' => 'wxpay', 'qqpay' => 'qqpay'];
 
@@ -261,28 +321,127 @@ class PublicController extends Controller
             exit;
         }
 
-        // 更新订单
-        $db->beginTransaction();
-        try {
-            $db->execute(
-                "UPDATE {$db->table('orders')} SET trade_no = ?, status = 'paid', paid_at = NOW() WHERE id = ?",
-                [$tradeNo, $order['id']]
-            );
+        // 记录第三方交易号，随后由 processOrderPaid 完成卡密发放与状态更新
+        $db->execute(
+            "UPDATE {$db->table('orders')} SET trade_no = ? WHERE id = ?",
+            [$tradeNo, $order['id']]
+        );
 
-            // 生成卡密发货
-            $orderController = new OrderController();
-            $orderController->processOrderPaid($order['id']);
-
-            $db->commit();
-        } catch (\Throwable $e) {
-            $db->rollback();
-            error_log('Payment notify error: ' . $e->getMessage());
-            echo 'error';
-            exit;
-        }
+        $orderController = new OrderController();
+        $orderController->processOrderPaid($order['id']);
 
         echo 'success';
         exit;
+    }
+
+    /**
+     * 支付同步完成（前端 return_url 回调触发）
+     * 当异步 notify 不可达时（如本地开发环境），由前端提交 return_url 参数来补单
+     */
+    public function paymentComplete(): void
+    {
+        $input = $this->getJsonInput();
+
+        $tradeNo     = $input['trade_no'] ?? '';
+        $outTradeNo  = $input['out_trade_no'] ?? '';
+        $tradeStatus = $input['trade_status'] ?? '';
+        $sign        = $input['sign'] ?? '';
+        $signType    = $input['sign_type'] ?? '';
+        $money       = $input['money'] ?? '';
+
+        if (!$outTradeNo || !$sign) {
+            $this->error('参数不完整');
+        }
+
+        // 验证签名
+        $appKey = $this->getPaymentConfig('payment_app_key', config('app.payment.app_key', ''));
+        $params = $input;
+        unset($params['sign'], $params['sign_type']);
+        ksort($params);
+        $signStr = '';
+        foreach ($params as $k => $v) {
+            $signStr .= $k . '=' . $v . '&';
+        }
+        $signStr = rtrim($signStr, '&');
+        $calcSign = md5($signStr . $appKey);
+
+        if ($calcSign !== $sign) {
+            $this->error('签名验证失败');
+        }
+
+        if ($tradeStatus !== 'TRADE_SUCCESS') {
+            $this->error('交易未成功');
+        }
+
+        $db = Database::getInstance();
+        $order = $db->fetch(
+            "SELECT * FROM {$db->table('orders')} WHERE order_no = ?",
+            [$outTradeNo]
+        );
+
+        if (!$order) {
+            $this->error('订单不存在');
+        }
+
+        // 如果已支付，直接返回订单详情
+        if ($order['status'] === 'paid') {
+            $auth = $db->fetch(
+                "SELECT bot_qq, contact_qq, expire_time, project_name 
+                 FROM {$db->table('authorizations')} WHERE bot_qq = ? AND contact_qq = ?",
+                [$order['bot_qq'] ?? '', $order['contact_qq'] ?? '']
+            );
+            $this->success([
+                'order_no'     => $order['order_no'],
+                'status'       => 'paid',
+                'bot_qq'       => $auth['bot_qq'] ?? $order['bot_qq'] ?? '',
+                'contact_qq'   => $auth['contact_qq'] ?? $order['contact_qq'] ?? '',
+                'project_name' => $auth['project_name'] ?? '',
+                'expire_time'  => $auth['expire_time'] ?? null,
+                'amount'       => $order['amount'],
+                'is_renew'     => ($auth['bot_qq'] ?? false) ? true : false,
+            ], '订单已支付');
+            return;
+        }
+
+        // 检测是否续费
+        $isRenew = false;
+        $botQq = $order['bot_qq'] ?? '';
+        $contactQq = $order['contact_qq'] ?? '';
+        if ($botQq && $contactQq) {
+            $exist = $db->fetch(
+                "SELECT id FROM {$db->table('authorizations')} WHERE bot_qq = ? AND contact_qq = ? LIMIT 1",
+                [$botQq, $contactQq]
+            );
+            $isRenew = (bool) $exist;
+        }
+
+        // 记录第三方交易号
+        $db->execute(
+            "UPDATE {$db->table('orders')} SET trade_no = ? WHERE id = ?",
+            [$tradeNo, $order['id']]
+        );
+
+        // 完成订单
+        $orderController = new OrderController();
+        $orderController->processOrderPaid($order['id']);
+
+        // 查询生成的授权
+        $auth = $db->fetch(
+            "SELECT bot_qq, contact_qq, expire_time, project_name 
+             FROM {$db->table('authorizations')} WHERE bot_qq = ? AND contact_qq = ?",
+            [$order['bot_qq'] ?? '', $order['contact_qq'] ?? '']
+        );
+
+        $this->success([
+            'order_no'     => $outTradeNo,
+            'status'       => 'paid',
+            'bot_qq'       => $auth['bot_qq'] ?? $order['bot_qq'] ?? '',
+            'contact_qq'   => $auth['contact_qq'] ?? $order['contact_qq'] ?? '',
+            'project_name' => $auth['project_name'] ?? '',
+            'expire_time'  => $auth['expire_time'] ?? null,
+            'amount'       => $order['amount'],
+            'is_renew'     => $isRenew,
+        ], '支付确认成功');
     }
 
     /**

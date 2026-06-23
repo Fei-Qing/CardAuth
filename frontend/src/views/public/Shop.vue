@@ -682,7 +682,10 @@ async function handlePay() {
       coupon_code: buyCouponResult.value?.valid ? buyCouponCode.value.trim() : '',
       bot_qq: buyBotQq.value.trim(), contact_qq: buyContactQq.value.trim(),
     })
-    if (res.data.pay_url) window.open(res.data.pay_url, '_blank')
+    if (res.data.pay_url) {
+      ElMessage.success('订单创建成功，5秒后跳转支付页面')
+      setTimeout(() => { window.open(res.data.pay_url, '_blank') }, 5000)
+    }
     pollOrderStatus(res.data.order_no)
   } catch { /* handled */ }
   finally { loading.pay = false }

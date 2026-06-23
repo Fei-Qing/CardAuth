@@ -24,5 +24,21 @@ if ($uri !== '/' && file_exists(__DIR__ . '/public' . $uri)) {
     exit;
 }
 
-// 所有请求统一交由 index.php 处理
-require_once __DIR__ . '/public/index.php';
+// API 请求走后端入口
+if (str_starts_with($uri, '/api/')) {
+    require_once __DIR__ . '/public/index.php';
+    exit;
+}
+
+// 非 API 请求返回前端 SPA 入口（index.html），前端 Vue Router 负责渲染路由
+$indexHtml = __DIR__ . '/public/index.html';
+if (file_exists($indexHtml)) {
+    header('Content-Type: text/html; charset=utf-8');
+    readfile($indexHtml);
+    exit;
+}
+
+// 兜底：无法处理
+http_response_code(404);
+echo 'Not Found';
+exit;

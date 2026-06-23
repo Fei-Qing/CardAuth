@@ -26,7 +26,7 @@ function Start-Backend {
         return
     }
     Write-Host "[Backend] Starting PHP server at http://127.0.0.1:8080 ..." -ForegroundColor Cyan
-    $proc = Start-Process -FilePath "php" -ArgumentList "-S 127.0.0.1:8080 -t public" -WorkingDirectory $backendPath -WindowStyle Hidden -PassThru
+    $proc = Start-Process -FilePath "php" -ArgumentList "-S 127.0.0.1:8080 router.php" -WorkingDirectory $backendPath -WindowStyle Hidden -PassThru
     Write-Host "[Backend] Process ID: $($proc.Id)" -ForegroundColor Green
 }
 

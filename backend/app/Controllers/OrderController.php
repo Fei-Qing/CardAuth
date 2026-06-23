@@ -224,7 +224,7 @@ class OrderController extends Controller
     }
 
     /**
-     * 处理支付成功
+     * 处理支付成功：已有授权则续费，无则新建
      */
     public function processOrderPaid(int $orderId): void
     {
@@ -232,41 +232,74 @@ class OrderController extends Controller
         $order = $db->fetch("SELECT * FROM {$db->table('orders')} WHERE id = ?", [$orderId]);
         if (!$order || $order['status'] !== 'pending') return;
 
-        $snowflake = new \App\Services\SnowflakeService();
-        $cardKey = $snowflake->generateCardKey();
-
         $cardType = $db->fetch(
             "SELECT * FROM {$db->table('card_types')} WHERE id = ?",
             [$order['card_type_id']]
         );
 
-        $expireTime = null;
-        $durationDays = $cardType['duration_days'] ?? 0;
-        if ($durationDays > 0) {
-            $expireTime = date('Y-m-d H:i:s', strtotime("+{$durationDays} days"));
-        }
+        $project = $db->fetch(
+            "SELECT name FROM {$db->table('projects')} WHERE id = ?",
+            [$order['project_id']]
+        );
+
+        $durationDays = (int) ($cardType['duration_days'] ?? 0);
+
+        $botQq = $order['bot_qq'] ?? '';
+        $contactQq = $order['contact_qq'] ?? '';
 
         $db->beginTransaction();
         try {
-            // 创建卡密
-            $cardId = $db->insert(
-                "INSERT INTO {$db->table('cards')} (card_key, project_id, card_type_id, type, duration_days, status, expire_time, order_id, remark)
-                 VALUES (?, ?, ?, ?, ?, 'unused', ?, ?, '在线购买')",
-                [
-                    $cardKey,
-                    $order['project_id'],
-                    $order['card_type_id'],
-                    $cardType['name'] ?? '',
-                    $durationDays,
-                    $expireTime,
-                    $orderId,
-                ]
-            );
+            if ($botQq && $contactQq) {
+                // 查找该 bot_qq + contact_qq 的现有授权
+                $existing = $db->fetch(
+                    "SELECT id, expire_time, status FROM {$db->table('authorizations')} WHERE bot_qq = ? AND contact_qq = ? LIMIT 1",
+                    [$botQq, $contactQq]
+                );
 
-            // 更新订单
+                if ($existing) {
+                    // 续费：延长到期时间
+                    if ($durationDays > 0) {
+                        // 从当前日期或原到期时间（取较晚者）开始延长
+                        $base = $existing['expire_time'] && $existing['expire_time'] > date('Y-m-d H:i:s')
+                            ? $existing['expire_time']
+                            : date('Y-m-d H:i:s');
+                        $expireTime = date('Y-m-d H:i:s', strtotime($base . " +{$durationDays} days"));
+                    } else {
+                        // 永久卡：到期时间置为null
+                        $expireTime = null;
+                    }
+
+                    $db->execute(
+                        "UPDATE {$db->table('authorizations')} SET status = 'active', expire_time = ?, duration_days = duration_days + ?, updated_at = NOW() WHERE id = ?",
+                        [$expireTime, $durationDays, $existing['id']]
+                    );
+                } else {
+                    // 新建授权
+                    $expireTime = null;
+                    if ($durationDays > 0) {
+                        $expireTime = date('Y-m-d H:i:s', strtotime("+{$durationDays} days"));
+                    }
+
+                    $db->execute(
+                        "INSERT INTO {$db->table('authorizations')} 
+                         (project_id, project_name, bot_qq, contact_qq, duration_days, status, authorized_at, expire_time)
+                         VALUES (?, ?, ?, ?, ?, 'active', NOW(), ?)",
+                        [
+                            $order['project_id'],
+                            $project['name'] ?? '',
+                            $botQq,
+                            $contactQq,
+                            $durationDays,
+                            $expireTime,
+                        ]
+                    );
+                }
+            }
+
+            // 更新订单状态
             $db->execute(
-                "UPDATE {$db->table('orders')} SET status = 'paid', card_id = ?, paid_at = NOW() WHERE id = ?",
-                [$cardId, $orderId]
+                "UPDATE {$db->table('orders')} SET status = 'paid', paid_at = NOW() WHERE id = ?",
+                [$orderId]
             );
 
             $db->commit();

@@ -220,8 +220,8 @@ CREATE TABLE `ca_configs` (
 DROP TABLE IF EXISTS `ca_authorizations`;
 CREATE TABLE `ca_authorizations` (
     `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-    `card_id` BIGINT UNSIGNED NOT NULL COMMENT '关联卡密ID',
-    `card_key` VARCHAR(64) NOT NULL COMMENT '卡密(冗余)',
+    `card_id` BIGINT UNSIGNED DEFAULT NULL COMMENT '关联卡密ID(可选)',
+    `card_key` VARCHAR(64) DEFAULT NULL COMMENT '卡密(可选)',
     `project_id` BIGINT UNSIGNED NOT NULL COMMENT '所属项目ID',
     `project_name` VARCHAR(100) DEFAULT '' COMMENT '项目名称(冗余)',
     `bot_qq` VARCHAR(20) NOT NULL COMMENT '机器人QQ号',
@@ -239,7 +239,7 @@ CREATE TABLE `ca_authorizations` (
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (`id`),
-    UNIQUE KEY `uk_card_bot_contact` (`card_id`, `bot_qq`, `contact_qq`),
+    UNIQUE KEY `uk_bot_contact` (`bot_qq`, `contact_qq`),
     KEY `idx_bot_qq` (`bot_qq`),
     KEY `idx_contact_qq` (`contact_qq`),
     KEY `idx_card_id` (`card_id`),

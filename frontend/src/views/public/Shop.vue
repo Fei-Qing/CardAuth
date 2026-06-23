@@ -1,4 +1,4 @@
-﻿﻿<template>
+﻿﻿﻿﻿<template>
 <div class="shop-app">
     <!-- ========== 全屏 Loading ========== -->
     <transition name="loader-fade">

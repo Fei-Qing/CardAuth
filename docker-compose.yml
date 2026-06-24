@@ -1,0 +1,59 @@
+version: "3.8"
+
+services:
+  db:
+    image: mysql:8.0
+    container_name: cardauth-db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root_secret_change_me}
+      MYSQL_DATABASE: ${DB_NAME:-card_auth}
+      MYSQL_USER: ${DB_USER:-card_auth}
+      MYSQL_PASSWORD: ${DB_PASS:-card_auth_pass}
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./backend/database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - cardauth
+
+  app:
+    build: .
+    container_name: cardauth-app
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+      APP_URL: ${APP_URL:-http://localhost:8080}
+      DB_HOST: db
+      DB_PORT: "3306"
+      DB_NAME: ${DB_NAME:-card_auth}
+      DB_USER: ${DB_USER:-card_auth}
+      DB_PASS: ${DB_PASS:-card_auth_pass}
+      DB_PREFIX: ca_
+      JWT_SECRET: ${JWT_SECRET:-}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root_secret_change_me}
+      PAYMENT_TYPE: ${PAYMENT_TYPE:-epay}
+      PAYMENT_API_URL: ${PAYMENT_API_URL:-}
+      PAYMENT_APP_ID: ${PAYMENT_APP_ID:-}
+      PAYMENT_APP_KEY: ${PAYMENT_APP_KEY:-}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - cardauth
+
+volumes:
+  mysql_data:
+    driver: local
+
+networks:
+  cardauth:
+    driver: bridge

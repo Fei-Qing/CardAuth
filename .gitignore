@@ -2,7 +2,10 @@
 
 # 后端
 /backend/.env
+/.env
 /backend/storage/cache/*
+/backend/storage/logs/*
+!/backend/storage/logs/.gitkeep
 /backend/vendor/
 
 # 前端

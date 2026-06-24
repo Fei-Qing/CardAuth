@@ -1,0 +1,40 @@
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# 文档
+*.md
+!README.md
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Node
+node_modules/
+frontend/node_modules/
+frontend/dist/
+
+# PHP
+vendor/
+backend/vendor/
+backend/.env
+backend/storage/cache/*
+backend/storage/logs/*
+backend/tests/
+backend/tmp_*.php
+backend/composer.lock
+
+# Docker
+docker-compose.yml
+.dockerignore
+.env.docker
+deploy.sh
+
+# OS
+.DS_Store
+Thumbs.db
+*.log

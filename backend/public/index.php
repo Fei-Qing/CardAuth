@@ -5,9 +5,19 @@
  */
 
 // 错误报告设置
-error_reporting(E_ALL);
-ini_set('display_errors', '0');
+$isDev = (getenv('APP_ENV') ?: 'production') === 'development';
+$isDebug = filter_var(getenv('APP_DEBUG') ?: 'false', FILTER_VALIDATE_BOOLEAN);
+
+error_reporting($isDev ? E_ALL : E_ALL & ~E_DEPRECATED & ~E_STRICT);
+ini_set('display_errors', $isDev ? '1' : '0');
 ini_set('log_errors', '1');
+ini_set('error_log', STORAGE_PATH . '/logs/error.log');
+
+// 生产环境隐藏 PHP 版本
+if (!$isDev) {
+    ini_set('expose_php', '0');
+    header_remove('X-Powered-By');
+}
 
 // 定义基础路径
 define('BASE_PATH', dirname(__DIR__));
@@ -60,10 +70,10 @@ try {
     http_response_code(500);
     echo json_encode([
         'code'    => 500,
-        'message' => config('app.debug') ? $e->getMessage() : '服务器内部错误',
+        'message' => $isDebug ? $e->getMessage() : '服务器内部错误',
         'data'    => null,
     ], JSON_UNESCAPED_UNICODE);
-    if (config('app.debug')) {
+    if ($isDebug) {
         error_log($e->getMessage() . "\n" . $e->getTraceAsString());
     }
 }

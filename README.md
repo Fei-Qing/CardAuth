@@ -40,42 +40,118 @@
 
 ## 快速开始
 
-### 环境要求
-- PHP 7.4+（需启用 PDO、PDO_MySQL）
-- MySQL 8.0+
-- Node.js 16+
+### 方式一：Docker 部署（推荐）
 
-### 1. 初始化数据库
+```bash
+# 1. 配置环境变量
+cp .env.docker .env
+# 编辑 .env，设置 JWT_SECRET 和数据库密码
+
+# 2. 一键启动
+docker compose up -d
+
+# 3. 访问
+http://localhost:8080
+```
+
+首次启动自动完成：前端构建 → 数据库初始化 → Nginx + PHP-FPM 启动。
+
+### 方式二：传统部署
+
+#### 环境要求
+- Linux 服务器（CentOS 7+ / Ubuntu 18+ / Debian 10+）
+- Nginx 1.18+
+- PHP 8.1+（需启用 PDO、PDO_MySQL、mbstring、bcmath）
+- PHP-FPM
+- MySQL 8.0+
+- Node.js 18+（仅构建阶段需要，部署后不需要）
+- Composer
+
+#### 1. 一键部署脚本
+
+```bash
+# 在项目根目录执行，按提示输入配置
+sudo bash deploy.sh your-domain.com
+```
+
+脚本自动完成：环境检查 → 前端构建 → 文件部署 → 数据库初始化 → Nginx 配置 → 权限设置。
+
+### 方式二：手动部署
+
+#### 1. 初始化数据库
 ```bash
 mysql -u root -p < backend/database/schema.sql
 ```
 
-### 2. 配置后端
+#### 2. 配置环境变量
 ```bash
 cd backend
 cp .env.example .env
-# 编辑 .env 填入数据库信息
+# 编辑 .env，确保:
+#   APP_ENV=production
+#   APP_DEBUG=false
+#   DB_* 填入实际数据库信息
+#   JWT_SECRET 填入随机 64 位字符串
 ```
 
-### 3. 启动
+#### 3. 安装依赖
 ```bash
-# 一键启动（前端 + 后端）
-.\start.ps1
-
-# 或分别启动
-cd backend && php -S 0.0.0.0:8080 -t backend
-cd frontend && npm install && npm run dev
+cd backend && composer install --no-dev --optimize-autoloader
+cd ../frontend && npm install && npm run build
 ```
 
-### 4. 访问
-- 管理后台：`http://localhost:3000`
-- 代理登录：`http://localhost:3000/#/agent/login`
-- 购买商城：`http://localhost:3000/#/shop`
+构建产物输出到 `frontend/dist/`，将其复制到 `backend/public/`：
+```bash
+cp -r frontend/dist/* backend/public/
+```
 
-### 5. 默认管理员
+#### 4. 配置 Nginx
+
+参考 [deploy/nginx.conf](deploy/nginx.conf)，核心配置：
+
+```nginx
+server {
+    listen 443 ssl http2;
+    server_name your-domain.com;
+    root /www/wwwroot/your-site/public;
+    index index.php index.html;
+
+    # 前端 SPA fallback
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # API 路由到 PHP
+    location /api {
+        try_files $uri $uri/ /index.php?$query_string;
+    }
+
+    location ~ \.php$ {
+        fastcgi_pass unix:/tmp/php-cgi-74.sock;  # 按实际 PHP 版本调整
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        include fastcgi_params;
+    }
+
+    # 安全加固
+    location ~ /\.(?!well-known) { deny all; }
+    location ~* \.(env|sql|log|md)$ { deny all; }
+    location ~* ^/(storage|config|routes)/ { deny all; }
+}
+```
+
+#### 5. 设置权限
+```bash
+chown -R www:www /www/wwwroot/your-site
+chmod -R 755 /www/wwwroot/your-site
+chmod 600 /www/wwwroot/your-site/.env
+```
+
+#### 6. 默认管理员
 | 用户名 | 密码 |
 |--------|------|
 | admin | admin123456 |
+
+> 首次登录后请立即修改密码。
 
 ## SMTP 邮件通知配置
 
@@ -591,7 +667,14 @@ card/
 │       ├── router/           # 路由配置
 │       ├── stores/           # Pinia 状态管理
 │       └── views/            # 页面组件 (管理后台 + 代理 + 公开)
-└── deploy/                   # 部署配置 (Nginx + 宝塔)
+├── docker/                   # Docker 配置
+│   ├── nginx.conf            # Nginx 容器配置
+│   ├── supervisord.conf      # Supervisor 进程管理
+│   └── entrypoint.sh         # 容器入口脚本
+├── deploy/                   # 传统部署配置 (Nginx + 宝塔)
+├── Dockerfile                # Docker 多阶段构建
+├── docker-compose.yml        # Docker 编排 (MySQL + App)
+└── .env.docker               # Docker 环境变量模板
 ```
 
 ## License
